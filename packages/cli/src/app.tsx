@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Text } from 'ink'
+import { Box, Text } from 'ink'
 import { computeSystemInfo, type SystemInfo } from '@maestro/hardware'
 import { OllamaProvider, loadCatalog } from '@maestro/providers'
 import type { HealthStatus, CatalogModel } from '@maestro/providers'
@@ -13,8 +13,9 @@ import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
 export function decideStartScreen(cfg: MaestroConfig | null, health: HealthStatus): StartScreen {
-  if (!cfg) return 'setup'
+  // Nothing works without a running backend — surface that first.
   if (!health.running) return 'backend-error'
+  if (!cfg) return 'setup'
   return 'repl'
 }
 
@@ -73,7 +74,14 @@ export function App(): React.ReactElement {
 
   if (screen === 'loading' || !sys) return <Text>Starting Maestro…</Text>
   if (screen === 'backend-error')
-    return <Text color="red">Ollama is not running. Start it with `ollama serve` and relaunch.</Text>
+    return (
+      <Box flexDirection="column">
+        <Text color="red">No local-model backend detected (Ollama).</Text>
+        <Text>Install:  brew install ollama</Text>
+        <Text>Start:    ollama serve</Text>
+        <Text dimColor>Then relaunch maestro.</Text>
+      </Box>
+    )
   if (screen === 'setup')
     return (
       <SetupWizard
