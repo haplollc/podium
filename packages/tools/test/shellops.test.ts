@@ -51,9 +51,9 @@ describe('shell tools', () => {
     expect(out).toContain('inner.ts')
   })
 
-  it('allTools exposes the six core tools and toolByName resolves them', () => {
+  it('allTools exposes the core tools and toolByName resolves them', () => {
     const names = allTools.map(t => t.schema.name).sort()
-    expect(names).toEqual(['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'Write'])
+    expect(names).toEqual(['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'TodoWrite', 'Write'])
     expect(toolByName('Edit')?.schema.name).toBe('Edit')
     expect(toolByName('Nope')).toBeUndefined()
   })

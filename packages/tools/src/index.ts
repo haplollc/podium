@@ -1,5 +1,5 @@
 export { truncateLines } from './truncate.js'
-export type { Tool, ToolContext } from './types.js'
+export type { Tool, ToolContext, TodoItem, TodoStore } from './types.js'
 
 import { readTool } from './read.js'
 import { writeTool } from './write.js'
@@ -7,6 +7,7 @@ import { editTool } from './edit.js'
 import { bashTool } from './bash.js'
 import { grepTool } from './grep.js'
 import { globTool } from './glob.js'
+import { todoTool } from './todo.js'
 import type { Tool } from './types.js'
 
 export { readTool } from './read.js'
@@ -15,8 +16,9 @@ export { editTool } from './edit.js'
 export { bashTool } from './bash.js'
 export { grepTool } from './grep.js'
 export { globTool } from './glob.js'
+export { todoTool } from './todo.js'
 
-export const allTools: Tool[] = [readTool, writeTool, editTool, bashTool, grepTool, globTool]
+export const allTools: Tool[] = [readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool]
 
 export function toolByName(name: string): Tool | undefined {
   return allTools.find(t => t.schema.name === name)

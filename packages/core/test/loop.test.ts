@@ -108,3 +108,56 @@ describe('runTurn', () => {
     expect(calls.length).toBe(3)   // exactly maxSteps tool executions
   })
 })
+
+describe('runTurn permission gate', () => {
+  const mkWrite = (ran: string[]) => ({
+    schema: { name: 'Write', description: 'w', parameters: { type: 'object', properties: {} } },
+    run: async () => { ran.push('write'); return 'wrote' },
+  })
+
+  it('denies mutations in plan mode without running the tool', async () => {
+    const ran: string[] = []
+    const provider = fakeProvider([
+      [{ type: 'tool_call', call: { id: '1', name: 'Write', arguments: {} } }, { type: 'done' }],
+      [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'write a file' })
+    await runTurn({ provider, model: 'm', cm, tools: [mkWrite(ran)], systemPrompt: 'sys', mode: 'plan' })
+    expect(ran).toEqual([])
+    expect(cm.messages().some(m => m.role === 'tool' && m.content.includes('not allowed in plan'))).toBe(true)
+  })
+
+  it('runs a mutation in default mode only after onPermissionAsk approves', async () => {
+    const ran: string[] = []
+    const provider = fakeProvider([
+      [{ type: 'tool_call', call: { id: '1', name: 'Write', arguments: {} } }, { type: 'done' }],
+      [{ type: 'text', delta: 'done' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'write' })
+    await runTurn({ provider, model: 'm', cm, tools: [mkWrite(ran)], systemPrompt: 'sys', mode: 'default', onPermissionAsk: async () => false })
+    expect(ran).toEqual([])
+    expect(cm.messages().some(m => m.role === 'tool' && m.content.includes('denied by user'))).toBe(true)
+  })
+})
+
+describe('runTurn auto-repair', () => {
+  it('nudges once when text looks like a botched tool call, then executes', async () => {
+    const calls: string[] = []
+    const provider = fakeProvider([
+      // step 0: malformed-looking attempt (mentions Echo + braces, but not valid JSON call)
+      [{ type: 'text', delta: 'I will call { Echo with value hi }' }, { type: 'done' }],
+      // step 1: after the repair nudge, emit a proper native tool call
+      [{ type: 'tool_call', call: { id: '1', name: 'Echo', arguments: { value: 'hi' } } }, { type: 'done' }],
+      // step 2: final answer
+      [{ type: 'text', delta: 'finished' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'echo hi' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys' })
+    expect(calls).toEqual(['hi'])
+    expect(out).toBe('finished')
+    expect(cm.messages().some(m => m.role === 'user' && m.content.includes('ONLY a JSON object'))).toBe(true)
+  })
+})

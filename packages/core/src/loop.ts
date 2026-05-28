@@ -3,6 +3,7 @@ import type { Tool } from '@maestro/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
 import { extractToolCalls } from './tool-parse.js'
+import { decide, type PermissionMode } from './permission.js'
 
 export interface RunTurnOpts {
   provider: Provider
@@ -16,6 +17,17 @@ export interface RunTurnOpts {
   onText?: (delta: string) => void
   onToolStart?: (call: ToolCall) => void
   maxSteps?: number
+  mode?: PermissionMode
+  /** Called when a tool needs interactive approval; return false to deny. */
+  onPermissionAsk?: (call: ToolCall) => Promise<boolean>
+  /** Max times to nudge the model to re-emit a valid tool call. Default 1. */
+  maxRepairs?: number
+}
+
+/** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
+function looksLikeToolAttempt(text: string, schemas: { name: string }[]): boolean {
+  const hasBrace = text.includes('{') && text.includes('}')
+  return hasBrace && schemas.some(s => text.includes(s.name))
 }
 
 /** Runs one user turn to completion: loops model<->tools until the model stops
@@ -26,6 +38,8 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
   const buffer = opts.compactBuffer ?? 1500
   const toolSchemas = tools.map(t => t.schema)
 
+  const mode = opts.mode ?? 'default'
+  let repairs = 0
   let finalText = ''
   for (let step = 0; step < maxSteps; step++) {
     if (shouldCompact(cm.stats(), buffer)) {
@@ -60,9 +74,33 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
 
     cm.add({ role: 'assistant', content: assistantText, tool_calls: effectiveCalls.length ? effectiveCalls : undefined })
 
-    if (effectiveCalls.length === 0) { finalText = assistantText; break }
+    if (effectiveCalls.length === 0) {
+      // Auto-repair: if the text looks like a failed tool call, nudge once for valid JSON.
+      if (repairs < (opts.maxRepairs ?? 1) && looksLikeToolAttempt(assistantText, toolSchemas)) {
+        repairs++
+        cm.add({
+          role: 'user',
+          content: 'Your previous message looked like a tool call but could not be parsed. Reply with ONLY a JSON object of the form {"name": <tool>, "arguments": {...}} and no other text.',
+        })
+        continue
+      }
+      finalText = assistantText
+      break
+    }
 
     for (const call of effectiveCalls) {
+      const d = decide(call.name, mode)
+      if (d === 'deny') {
+        cm.add({ role: 'tool', content: `Permission denied: ${call.name} is not allowed in ${mode} mode.`, tool_call_id: call.id })
+        continue
+      }
+      if (d === 'ask') {
+        const ok = opts.onPermissionAsk ? await opts.onPermissionAsk(call) : true
+        if (!ok) {
+          cm.add({ role: 'tool', content: `Permission denied by user: ${call.name}.`, tool_call_id: call.id })
+          continue
+        }
+      }
       opts.onToolStart?.(call)
       const tool = tools.find(t => t.schema.name === call.name)
       let result: string
