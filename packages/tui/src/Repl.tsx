@@ -87,7 +87,13 @@ export function Repl(props: {
         <ContextMeter stats={props.stats} />
       </Box>
 
-      <Box borderStyle="round" borderColor={props.busy ? 'gray' : 'cyan'} paddingX={1}>
+      <Box
+        borderStyle="single"
+        borderColor={props.busy ? 'gray' : 'cyan'}
+        borderLeft={false}
+        borderRight={false}
+        paddingY={0}
+      >
         <Text color="cyan">› </Text>
         {input.length === 0
           ? <Text dimColor>send a message  ·  / for commands</Text>
