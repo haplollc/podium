@@ -16,6 +16,8 @@ export interface RunTurnOpts {
   compactBuffer?: number
   onText?: (delta: string) => void
   onToolStart?: (call: ToolCall) => void
+  /** Fired when the model emits its first event of the turn (i.e. it's done loading). */
+  onModelStart?: () => void
   maxSteps?: number
   mode?: PermissionMode
   /** Called when a tool needs interactive approval; return false to deny. */
@@ -55,6 +57,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
   const mode = opts.planMode ? 'plan' : (opts.mode ?? 'default')
   let repairs = 0
   let finalText = ''
+  let modelStarted = false
   for (let step = 0; step < maxSteps; step++) {
     if (shouldCompact(cm.stats(), buffer)) {
       await compact(cm, {
@@ -70,6 +73,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
     let text = ''
     const toolCalls: ToolCall[] = []
     for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx, keepAlive: opts.keepAlive })) {
+      if (!modelStarted) { modelStarted = true; opts.onModelStart?.() }
       if (ev.type === 'text') { text += ev.delta; opts.onText?.(ev.delta) }
       else if (ev.type === 'tool_call') toolCalls.push(ev.call)
     }

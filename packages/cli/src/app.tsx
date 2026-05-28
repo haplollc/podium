@@ -146,7 +146,7 @@ export function App(): React.ReactElement {
     if (!cm || !cfg) return ''
     cm.add({ role: 'user', content: userContent })
     setBusy(true)
-    setStatus('Thinking…')
+    setStatus('Loading model…')   // until the model emits its first token
     setStreaming('')
     try {
       const reply = await runTurn({
@@ -160,6 +160,7 @@ export function App(): React.ReactElement {
         skills: registryRef.current,
         spawnAgent,
         exitPlan,
+        onModelStart: () => setStatus('Thinking…'),
         onText: (delta) => setStreaming(s => s + delta),
         onPermissionAsk: askPermission,
         preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
