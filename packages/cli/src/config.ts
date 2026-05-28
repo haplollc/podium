@@ -1,11 +1,13 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import type { PermissionMode } from '@maestro/core'
 
 export interface MaestroConfig {
   backend: 'ollama' | 'lmstudio' | 'mlx'
   model: string
   contextSize: number
+  mode?: PermissionMode   // permission mode; defaults to 'default' when absent
 }
 
 function configDir(override?: string): string {

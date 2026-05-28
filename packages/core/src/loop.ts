@@ -1,5 +1,5 @@
 import type { Provider, ChatMessage, ToolCall } from '@maestro/providers'
-import type { Tool } from '@maestro/tools'
+import type { Tool, TodoStore } from '@maestro/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
 import { extractToolCalls } from './tool-parse.js'
@@ -22,6 +22,8 @@ export interface RunTurnOpts {
   onPermissionAsk?: (call: ToolCall) => Promise<boolean>
   /** Max times to nudge the model to re-emit a valid tool call. Default 1. */
   maxRepairs?: number
+  /** Shared todo store passed to tools (e.g. TodoWrite). */
+  todos?: TodoStore
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -106,7 +108,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
       let result: string
       try {
         result = tool
-          ? await tool.run(call.arguments, { cwd: opts.cwd ?? process.cwd() })
+          ? await tool.run(call.arguments, { cwd: opts.cwd ?? process.cwd(), todos: opts.todos })
           : `Error: unknown tool ${call.name}`
       } catch (e) {
         result = `Error: ${(e as Error).message}`

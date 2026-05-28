@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Box, Text } from 'ink'
 import { computeSystemInfo, type SystemInfo } from '@maestro/hardware'
 import { OllamaProvider, loadCatalog } from '@maestro/providers'
-import type { HealthStatus, CatalogModel } from '@maestro/providers'
+import type { HealthStatus, CatalogModel, ToolCall } from '@maestro/providers'
 import {
-  ContextManager, buildSystemPrompt, runTurn, type ContextStats,
+  ContextManager, buildSystemPrompt, runTurn, compact, parseSlash,
+  type ContextStats, type PermissionMode,
 } from '@maestro/core'
-import { allTools } from '@maestro/tools'
-import { SetupWizard, Repl, type TranscriptEntry } from '@maestro/tui'
+import { allTools, type TodoItem, type TodoStore } from '@maestro/tools'
+import { SetupWizard, Repl, PermissionPrompt, type TranscriptEntry } from '@maestro/tui'
 import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
+import { runSlash, type SlashCtx } from './slash-handlers.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -19,6 +21,8 @@ export function decideStartScreen(cfg: MaestroConfig | null, health: HealthStatu
   return 'repl'
 }
 
+interface PendingPermission { call: ToolCall; resolve: (ok: boolean) => void }
+
 export function App(): React.ReactElement {
   const provider = new OllamaProvider()
   const [screen, setScreen] = useState<StartScreen | 'loading'>('loading')
@@ -26,10 +30,18 @@ export function App(): React.ReactElement {
   const [catalog, setCatalog] = useState<CatalogModel[]>([])
   const [installed, setInstalled] = useState<Set<string>>(new Set())
   const [cfg, setCfg] = useState<MaestroConfig | null>(null)
-  const [cm, setCm] = useState<ContextManager | null>(null)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [stats, setStats] = useState<ContextStats>({ used: 0, effective: 0, window: 0, percentUsed: 0 })
   const [busy, setBusy] = useState(false)
+  const [pending, setPending] = useState<PendingPermission | null>(null)
+  const [todos, setTodos] = useState<TodoItem[]>([])
+
+  const cmRef = useRef<ContextManager | null>(null)
+  const todosRef = useRef<TodoItem[]>([])
+  const todoStore: TodoStore = {
+    set: (items) => { todosRef.current = items; setTodos(items) },
+    get: () => todosRef.current,
+  }
 
   useEffect(() => {
     void (async () => {
@@ -46,30 +58,78 @@ export function App(): React.ReactElement {
 
   function initRepl(config: MaestroConfig) {
     const mgr = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
-    setCm(mgr)
+    cmRef.current = mgr
     setStats(mgr.stats())
   }
 
+  function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
+
   async function onWizardComplete(r: { model: string; contextSize: number }) {
-    const next: MaestroConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize }
+    const next: MaestroConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize, mode: 'default' }
     await saveConfig(next)
     setCfg(next); initRepl(next); setScreen('repl')
   }
 
+  async function summarize(prompt: string): Promise<string> {
+    let out = ''
+    for await (const ev of provider.chat({ model: cfg!.model, numCtx: cfg!.contextSize, messages: [{ role: 'user', content: prompt }] })) {
+      if (ev.type === 'text') out += ev.delta
+    }
+    return out
+  }
+
+  const slashCtx: SlashCtx = {
+    stats: () => cmRef.current?.stats() ?? stats,
+    clear: () => {
+      if (!cfg) return
+      const mgr = new ContextManager({ window: cfg.contextSize, outputReserve: 2000 })
+      cmRef.current = mgr
+      setTranscript([]); setStats(mgr.stats())
+    },
+    compact: async () => {
+      if (!cmRef.current) return
+      await compact(cmRef.current, { prefixCount: 1, summarize })
+      setStats(cmRef.current.stats())
+    },
+    openModelPicker: () => setScreen('setup'),
+    listModels: async () => (await provider.listLocal()).map(m => m.name),
+    pull: async (model) => { await provider.pull(model, () => {}) },
+  }
+
+  function askPermission(call: ToolCall): Promise<boolean> {
+    return new Promise(resolve => setPending({ call, resolve }))
+  }
+
   async function onSubmit(text: string) {
-    if (!cm || !cfg || !sys) return
+    const cm = cmRef.current
+    if (!cm || !cfg || !sys || busy) return
+
+    const slash = parseSlash(text)
+    if (slash) {
+      push({ role: 'user', text })
+      const msg = await runSlash(slash, slashCtx)
+      push({ role: 'assistant', text: msg })
+      return
+    }
+
     cm.add({ role: 'user', content: text })
-    setTranscript(t => [...t, { role: 'user', text }])
+    push({ role: 'user', text })
     setBusy(true)
-    const reply = await runTurn({
-      provider, model: cfg.model, cm, tools: allTools,
-      systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: allTools.map(t => t.schema.name) }),
-      numCtx: cfg.contextSize,
-      onToolStart: (call) => setTranscript(t => [...t, { role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` }]),
-    })
-    setTranscript(t => [...t, { role: 'assistant', text: reply }])
-    setStats(cm.stats())
-    setBusy(false)
+    try {
+      const reply = await runTurn({
+        provider, model: cfg.model, cm, tools: allTools,
+        systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: allTools.map(t => t.schema.name) }),
+        numCtx: cfg.contextSize,
+        mode: (cfg.mode ?? 'default') as PermissionMode,
+        todos: todoStore,
+        onPermissionAsk: askPermission,
+        onToolStart: (call) => push({ role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` }),
+      })
+      if (reply) push({ role: 'assistant', text: reply })
+    } finally {
+      setStats(cm.stats())
+      setBusy(false)
+    }
   }
 
   if (screen === 'loading' || !sys) return <Text>Starting Maestro…</Text>
@@ -89,5 +149,25 @@ export function App(): React.ReactElement {
         provider={provider} onComplete={onWizardComplete}
       />
     )
-  return <Repl stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy} />
+
+  return (
+    <Box flexDirection="column">
+      {todos.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          {todos.map((t, i) => (
+            <Text key={i} dimColor>
+              {t.status === 'completed' ? '[x]' : t.status === 'in_progress' ? '[~]' : '[ ]'} {t.content}
+            </Text>
+          ))}
+        </Box>
+      )}
+      <Repl stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy} />
+      {pending && (
+        <PermissionPrompt
+          call={pending.call}
+          onDecision={(ok) => { pending.resolve(ok); setPending(null) }}
+        />
+      )}
+    </Box>
+  )
 }
