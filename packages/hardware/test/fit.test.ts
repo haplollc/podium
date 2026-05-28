@@ -24,4 +24,17 @@ describe('estimateFit', () => {
     const r = estimateFit({ weightsGB: 13, contextTokens: 8192, kvPerKTokenGB: 0.18, overheadGB: 2 }, sys24)
     expect(r.verdict).toBe('tight')
   })
+
+  it('reports headroom (usable - required)', () => {
+    const r = estimateFit({ weightsGB: 4.7, contextTokens: 8192, kvPerKTokenGB: 0.12, overheadGB: 2 }, sys24)
+    expect(r.headroomGB).toBeCloseTo(r.usableGB - r.requiredGB, 1)
+    expect(r.headroomGB).toBeGreaterThan(0)
+  })
+
+  it('larger context shrinks headroom via the KV-cache term', () => {
+    const small = estimateFit({ weightsGB: 7, contextTokens: 4096, kvPerKTokenGB: 0.2 }, sys24)
+    const large = estimateFit({ weightsGB: 7, contextTokens: 32768, kvPerKTokenGB: 0.2 }, sys24)
+    expect(large.requiredGB).toBeGreaterThan(small.requiredGB)
+    expect(large.headroomGB).toBeLessThan(small.headroomGB)
+  })
 })

@@ -5,7 +5,7 @@ import { truncateLines } from './truncate.js'
 export const grepTool: Tool = {
   schema: {
     name: 'Grep',
-    description: 'Search file contents with a regex (ripgrep). Returns matching lines with file:line.',
+    description: 'Search file contents with a regex (ripgrep when available). Returns matching lines with file:line.',
     parameters: {
       type: 'object',
       properties: {
@@ -17,18 +17,29 @@ export const grepTool: Tool = {
     },
   },
   async run(args, ctx) {
-    const rgArgs = ['-n', String(args.pattern)]
-    if (args.glob) rgArgs.push('-g', String(args.glob))
-    rgArgs.push(args.path ? String(args.path) : '.')
-    // Fall back to grep -rn if rg is unavailable.
-    const bin = (await which('rg')) ? 'rg' : 'grep'
-    if (bin === 'grep') rgArgs.unshift('-r')
-    const r = await execa(bin, rgArgs, { cwd: ctx.cwd, reject: false })
+    const pattern = String(args.pattern)
+    const target = args.path ? String(args.path) : '.'
+    const glob = args.glob ? String(args.glob) : undefined
+
+    if (await hasBinary('rg')) {
+      const rgArgs = ['-n', pattern]
+      if (glob) rgArgs.push('-g', glob)
+      rgArgs.push(target)
+      const r = await execa('rg', rgArgs, { cwd: ctx.cwd, reject: false })
+      return truncateLines(r.stdout || '(no matches)', 100)
+    }
+
+    // grep fallback: --include uses glob semantics (rg's -g is not understood by grep).
+    const grepArgs = ['-rn']
+    if (glob) grepArgs.push(`--include=${glob}`)
+    grepArgs.push(pattern, target)
+    const r = await execa('grep', grepArgs, { cwd: ctx.cwd, reject: false })
     return truncateLines(r.stdout || '(no matches)', 100)
   },
 }
 
-async function which(cmd: string): Promise<boolean> {
+async function hasBinary(cmd: string): Promise<boolean> {
+  // `which` resolves real executables on PATH (not shell functions/aliases).
   const r = await execa('which', [cmd], { reject: false })
-  return r.exitCode === 0
+  return r.exitCode === 0 && r.stdout.trim().length > 0
 }

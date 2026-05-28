@@ -2,6 +2,7 @@ import type { Provider, ChatMessage, ToolCall } from '@maestro/providers'
 import type { Tool } from '@maestro/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
+import { extractToolCalls } from './tool-parse.js'
 
 export interface RunTurnOpts {
   provider: Provider
@@ -45,11 +46,23 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
       else if (ev.type === 'tool_call') toolCalls.push(ev.call)
     }
 
-    cm.add({ role: 'assistant', content: text, tool_calls: toolCalls.length ? toolCalls : undefined })
+    // Dual-path: prefer native tool_calls; otherwise fall back to parsing a
+    // tool call the model emitted as plain-text JSON (common with small models).
+    let effectiveCalls = toolCalls
+    let assistantText = text
+    if (toolCalls.length === 0) {
+      const parsed = extractToolCalls(text, toolSchemas.map(s => s.name))
+      if (parsed.calls.length > 0) {
+        effectiveCalls = parsed.calls
+        assistantText = parsed.cleanedText
+      }
+    }
 
-    if (toolCalls.length === 0) { finalText = text; break }
+    cm.add({ role: 'assistant', content: assistantText, tool_calls: effectiveCalls.length ? effectiveCalls : undefined })
 
-    for (const call of toolCalls) {
+    if (effectiveCalls.length === 0) { finalText = assistantText; break }
+
+    for (const call of effectiveCalls) {
       opts.onToolStart?.(call)
       const tool = tools.find(t => t.schema.name === call.name)
       let result: string

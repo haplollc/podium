@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { buildSystemPrompt } from '../src/system-prompt.js'
+import { runTurn } from '../src/loop.js'
+import { ContextManager } from '../src/context.js'
+import type { Provider, ChatEvent } from '@maestro/providers'
+import type { Tool } from '@maestro/tools'
 
 describe('buildSystemPrompt', () => {
   it('is compact (<1200 tokens worth of chars) and includes cwd + tool discipline', () => {
@@ -8,12 +12,12 @@ describe('buildSystemPrompt', () => {
     expect(p.toLowerCase()).toContain('read')
     expect(p.length).toBeLessThan(4800) // ~1200 tokens at 4 chars/token
   })
-})
 
-import { runTurn } from '../src/loop.js'
-import { ContextManager } from '../src/context.js'
-import type { Provider, ChatEvent } from '@maestro/providers'
-import type { Tool } from '@maestro/tools'
+  it('lists the provided tool names', () => {
+    const p = buildSystemPrompt({ cwd: '/p', os: 'darwin', toolNames: ['Read', 'Write', 'Bash'] })
+    expect(p).toContain('Read, Write, Bash')
+  })
+})
 
 function fakeProvider(scripts: ChatEvent[][]): Provider {
   let turn = 0
@@ -23,27 +27,84 @@ function fakeProvider(scripts: ChatEvent[][]): Provider {
     listLocal: async () => [],
     pull: async () => {},
     capabilities: async () => ({ tools: true }),
-    async *chat() { for (const e of scripts[turn++]) yield e },
+    async *chat() { for (const e of scripts[turn++] ?? []) yield e },
   }
 }
+
+const echoTool = (calls: string[]): Tool => ({
+  schema: { name: 'Echo', description: 'echo', parameters: { type: 'object', properties: {} } },
+  run: async (a) => { calls.push(String(a.value)); return `echoed ${a.value}` },
+})
 
 describe('runTurn', () => {
   it('executes a tool call then returns the final assistant text', async () => {
     const calls: string[] = []
-    const echoTool: Tool = {
-      schema: { name: 'Echo', description: 'echo', parameters: { type: 'object', properties: {} } },
-      run: async (a) => { calls.push(String(a.value)); return `echoed ${a.value}` },
-    }
     const provider = fakeProvider([
       [{ type: 'tool_call', call: { id: '1', name: 'Echo', arguments: { value: 'hi' } } }, { type: 'done' }],
       [{ type: 'text', delta: 'all done' }, { type: 'done' }],
     ])
     const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
     cm.add({ role: 'user', content: 'please echo hi' })
-    const out = await runTurn({
-      provider, model: 'm', cm, tools: [echoTool], systemPrompt: 'sys',
-    })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys' })
     expect(calls).toEqual(['hi'])
     expect(out).toBe('all done')
+  })
+
+  it('returns immediately when the model emits no tool calls', async () => {
+    const provider = fakeProvider([[{ type: 'text', delta: 'just text' }, { type: 'done' }]])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'hi' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [], systemPrompt: 'sys' })
+    expect(out).toBe('just text')
+  })
+
+  it('records unknown-tool and thrown-tool errors as tool results, then continues', async () => {
+    const boom: Tool = {
+      schema: { name: 'Boom', description: '', parameters: { type: 'object', properties: {} } },
+      run: async () => { throw new Error('kaboom') },
+    }
+    const provider = fakeProvider([
+      [
+        { type: 'tool_call', call: { id: '1', name: 'Ghost', arguments: {} } },
+        { type: 'tool_call', call: { id: '2', name: 'Boom', arguments: {} } },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'handled' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'go' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [boom], systemPrompt: 'sys' })
+    expect(out).toBe('handled')
+    const toolMsgs = cm.messages().filter(m => m.role === 'tool').map(m => m.content)
+    expect(toolMsgs.some(c => c.includes('unknown tool Ghost'))).toBe(true)
+    expect(toolMsgs.some(c => c.includes('kaboom'))).toBe(true)
+  })
+
+  it('auto-compacts before stepping when context is near full', async () => {
+    const provider = fakeProvider([
+      [{ type: 'text', delta: 'SUMMARY of earlier work' }, { type: 'done' }], // the summarize call
+      [{ type: 'text', delta: 'final answer' }, { type: 'done' }],            // the model step
+    ])
+    // Tiny window so shouldCompact() is true on the first step.
+    const cm = new ContextManager({ window: 100, outputReserve: 10 })
+    cm.add({ role: 'user', content: 'x'.repeat(2000) })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [], systemPrompt: 'sys' })
+    expect(out).toBe('final answer')
+    const contents = cm.messages().map(m => m.content).join('\n')
+    expect(contents).toContain('SUMMARY of earlier work') // earlier tail was replaced by the summary
+  })
+
+  it('stops at maxSteps even if the model keeps calling tools', async () => {
+    const calls: string[] = []
+    const loopingScripts: ChatEvent[][] = Array.from({ length: 10 }, () => [
+      { type: 'tool_call' as const, call: { id: 'x', name: 'Echo', arguments: { value: 'again' } } },
+      { type: 'done' as const },
+    ])
+    const provider = fakeProvider(loopingScripts)
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'loop' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys', maxSteps: 3 })
+    expect(out).toBe('')           // never produced a final text
+    expect(calls.length).toBe(3)   // exactly maxSteps tool executions
   })
 })
