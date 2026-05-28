@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
+import Spinner from 'ink-spinner'
 import type { ContextStats } from '@maestro/core'
 import { ContextMeter } from './ContextMeter.js'
 
@@ -10,34 +11,58 @@ export function Repl(props: {
   transcript: TranscriptEntry[]
   onSubmit: (input: string) => void | Promise<unknown>
   busy: boolean
+  streaming?: string            // live assistant text being typed out
+  status?: string               // spinner label while busy (e.g. "Loading model…")
+  commands?: string[]           // command names for /autocomplete
 }): React.ReactElement {
   const [input, setInput] = useState('')
+  const [sel, setSel] = useState(0)
   const inputRef = useRef('')
+  const selRef = useRef(0)
 
-  function submit(extra = '') {
-    const value = inputRef.current + extra
-    inputRef.current = ''
-    setInput('')
+  const commands = props.commands ?? []
+
+  function matchesFor(value: string): string[] {
+    const m = /^\/([^\s]*)$/.exec(value)
+    if (!m) return []
+    const q = m[1].toLowerCase()
+    return commands.filter(c => c.toLowerCase().startsWith(q)).slice(0, 6)
+  }
+
+  function setBoth(v: string) { inputRef.current = v; setInput(v) }
+  function setSelBoth(n: number) { selRef.current = n; setSel(n) }
+
+  function submit(value: string) {
+    setBoth(''); setSelBoth(0)
     if (value.length > 0) void props.onSubmit(value)
   }
 
   useInput((chunk, key) => {
     if (props.busy) return
-    if (key.backspace || key.delete) {
-      inputRef.current = inputRef.current.slice(0, -1)
-      setInput(inputRef.current)
+    const cur = inputRef.current
+    const menu = matchesFor(cur)
+    const menuOpen = menu.length > 0
+
+    if (key.upArrow) { if (menuOpen) setSelBoth(Math.max(0, selRef.current - 1)); return }
+    if (key.downArrow) { if (menuOpen) setSelBoth(Math.min(menu.length - 1, selRef.current + 1)); return }
+    if (key.backspace || key.delete) { setBoth(cur.slice(0, -1)); setSelBoth(0); return }
+    if (key.tab) {
+      if (menuOpen) setBoth('/' + menu[Math.min(selRef.current, menu.length - 1)] + ' ')
+      setSelBoth(0)
       return
     }
     if (key.ctrl || key.meta) return
-    // Ink may deliver typed text and the Enter key together in one chunk.
+
     const parts = chunk.split(/[\r\n]/)
     if (key.return || parts.length > 1) {
-      submit(parts[0] ?? '')
+      if (menuOpen) { submit('/' + menu[Math.min(selRef.current, menu.length - 1)]); return }
+      submit(cur + (parts[0] ?? ''))
       return
     }
-    inputRef.current += chunk
-    setInput(inputRef.current)
+    setBoth(cur + chunk); setSelBoth(0)
   })
+
+  const menu = matchesFor(input)
 
   return (
     <Box flexDirection="column">
@@ -46,12 +71,39 @@ export function Repl(props: {
           {e.role === 'user' ? '› ' : e.role === 'tool' ? '  ⚙ ' : ''}{e.text}
         </Text>
       ))}
-      <Box marginTop={1}><ContextMeter stats={props.stats} /></Box>
-      <Box>
-        <Text color="cyan">› </Text>
-        <Text>{input}</Text>
-        <Text>{props.busy ? ' …thinking' : ''}</Text>
+
+      {props.busy && props.streaming
+        ? <Text>{props.streaming}<Text color="gray">▍</Text></Text>
+        : null}
+
+      {props.busy && (
+        <Box marginTop={props.streaming ? 0 : 0}>
+          <Text color="yellow"><Spinner type="dots" /></Text>
+          <Text color="yellow"> {props.status ?? 'Thinking…'}</Text>
+        </Box>
+      )}
+
+      <Box marginTop={1}>
+        <ContextMeter stats={props.stats} />
       </Box>
+
+      <Box borderStyle="round" borderColor={props.busy ? 'gray' : 'cyan'} paddingX={1}>
+        <Text color="cyan">› </Text>
+        {input.length === 0
+          ? <Text dimColor>send a message  ·  / for commands</Text>
+          : <Text>{input}<Text color="cyan">▍</Text></Text>}
+      </Box>
+
+      {!props.busy && menu.length > 0 && (
+        <Box flexDirection="column" marginLeft={2}>
+          {menu.map((c, i) => (
+            <Text key={c} color={i === sel ? 'black' : 'cyan'} backgroundColor={i === sel ? 'cyan' : undefined}>
+              {' '}/{c}{' '}
+            </Text>
+          ))}
+          <Text dimColor>↑/↓ select · Tab complete · Enter run</Text>
+        </Box>
+      )}
     </Box>
   )
 }

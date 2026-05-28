@@ -10,7 +10,7 @@ import {
 } from '@maestro/core'
 import { allTools, baseTools, type TodoItem, type TodoStore } from '@maestro/tools'
 import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing } from '@maestro/skills'
-import { SetupWizard, Repl, PermissionPrompt, type TranscriptEntry } from '@maestro/tui'
+import { SetupWizard, Repl, PermissionPrompt, Banner, type TranscriptEntry } from '@maestro/tui'
 import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
 import { loadMemory } from './memory.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
@@ -39,6 +39,10 @@ export function App(): React.ReactElement {
   const [pending, setPending] = useState<PendingPermission | null>(null)
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [planMode, setPlanMode] = useState(false)
+  const [status, setStatus] = useState('')       // spinner label while busy
+  const [streaming, setStreaming] = useState('')  // live assistant text
+
+  const KEEP_ALIVE = '30m'
 
   const cmRef = useRef<ContextManager | null>(null)
   const todosRef = useRef<TodoItem[]>([])
@@ -67,7 +71,7 @@ export function App(): React.ReactElement {
       void runHooks(hooks, 'SessionStart', { cwd: process.cwd() })
       if (health.running) setInstalled(new Set((await provider.listLocal()).map(m => m.name)))
       const decided = decideStartScreen(existing, health)
-      if (decided === 'repl' && existing) initRepl(existing)
+      if (decided === 'repl' && existing) { initRepl(existing); void warmModel(existing.model) }
       setScreen(decided)
     })()
   }, [])
@@ -78,12 +82,23 @@ export function App(): React.ReactElement {
     setStats(mgr.stats())
   }
 
+  /** Preload the model so the first real turn is fast; shows a loading spinner. */
+  async function warmModel(model: string) {
+    if (!provider.warm) return
+    setStatus(`Loading ${model}…`)
+    setBusy(true)
+    try { await provider.warm(model, KEEP_ALIVE) } catch { /* best-effort */ }
+    setStatus('')
+    setBusy(false)
+  }
+
   function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
 
   async function onWizardComplete(r: { model: string; contextSize: number }) {
     const next: MaestroConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize, mode: 'default' }
     await saveConfig(next)
     setCfg(next); initRepl(next); setScreen('repl')
+    void warmModel(next.model)
   }
 
   async function summarize(prompt: string): Promise<string> {
@@ -115,7 +130,7 @@ export function App(): React.ReactElement {
     return runTurn({
       provider, model: cfg.model, cm: cm2, tools: baseTools,
       systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: baseTools.map(t => t.schema.name) }),
-      numCtx: cfg.contextSize, mode: 'default', todos: todoStore,
+      numCtx: cfg.contextSize, keepAlive: KEEP_ALIVE, mode: 'default', todos: todoStore,
     })
   }
 
@@ -131,24 +146,34 @@ export function App(): React.ReactElement {
     if (!cm || !cfg) return ''
     cm.add({ role: 'user', content: userContent })
     setBusy(true)
+    setStatus('Thinking…')
+    setStreaming('')
     try {
       const reply = await runTurn({
         provider, model: cfg.model, cm, tools: allTools,
         systemPrompt: systemPrompt(),
         numCtx: cfg.contextSize,
+        keepAlive: KEEP_ALIVE,
         mode: (cfg.mode ?? 'default') as PermissionMode,
         planMode: planRef.current,
         todos: todoStore,
         skills: registryRef.current,
         spawnAgent,
         exitPlan,
+        onText: (delta) => setStreaming(s => s + delta),
         onPermissionAsk: askPermission,
         preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
-        onToolStart: (call) => push({ role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` }),
+        onToolStart: (call) => {
+          setStreaming('')                       // tool starting; drop the pre-tool preview
+          setStatus(`${call.name}…`)
+          push({ role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` })
+        },
       })
       if (showAssistant && reply) push({ role: 'assistant', text: reply })
       return reply
     } finally {
+      setStreaming('')
+      setStatus('')
       setStats(cm.stats())
       setBusy(false)
     }
@@ -217,8 +242,14 @@ export function App(): React.ReactElement {
       />
     )
 
+  const commandNames = [
+    'model', 'models', 'pull', 'skills', 'plan', 'context', 'compact', 'clear', 'help',
+    ...registryRef.current.list().map(m => m.name),
+  ]
+
   return (
     <Box flexDirection="column">
+      <Banner model={cfg?.model ?? 'no model'} cwd={process.cwd()} />
       {planMode && <Text color="magenta">— PLAN MODE (read-only) —</Text>}
       {todos.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
@@ -229,7 +260,10 @@ export function App(): React.ReactElement {
           ))}
         </Box>
       )}
-      <Repl stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy} />
+      <Repl
+        stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy}
+        streaming={streaming} status={status} commands={commandNames}
+      />
       {pending && (
         <PermissionPrompt
           call={pending.call}

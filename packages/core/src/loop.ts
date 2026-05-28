@@ -34,6 +34,8 @@ export interface RunTurnOpts {
   planMode?: boolean
   /** PreToolUse hook gate; return false to block the tool. */
   preToolUse?: (call: ToolCall) => Promise<boolean>
+  /** Keep the model loaded between turns (e.g. "30m"). */
+  keepAlive?: string
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -58,7 +60,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
       await compact(cm, {
         prefixCount: 1,
         summarize: async (prompt) => collectText(provider.chat({
-          model, numCtx: opts.numCtx,
+          model, numCtx: opts.numCtx, keepAlive: opts.keepAlive,
           messages: [{ role: 'user', content: prompt }],
         })),
       })
@@ -67,7 +69,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }, ...cm.messages()]
     let text = ''
     const toolCalls: ToolCall[] = []
-    for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx })) {
+    for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx, keepAlive: opts.keepAlive })) {
       if (ev.type === 'text') { text += ev.delta; opts.onText?.(ev.delta) }
       else if (ev.type === 'tool_call') toolCalls.push(ev.call)
     }

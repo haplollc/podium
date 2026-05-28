@@ -7,7 +7,7 @@
   "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
   "scripts": { "build": "tsup src/index.ts --format esm --dts" },
   "dependencies": {
-    "ink": "^5.0.0", "react": "^18.3.0",
+    "ink": "^5.0.0", "react": "^18.3.0", "ink-spinner": "^5.0.0",
     "@maestro/core": "workspace:*", "@maestro/providers": "workspace:*",
     "@maestro/hardware": "workspace:*", "@maestro/tools": "workspace:*"
   },

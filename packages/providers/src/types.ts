@@ -22,6 +22,8 @@ export interface ChatRequest {
   tools?: ToolSchema[]
   numCtx?: number
   temperature?: number
+  /** How long the backend should keep the model loaded (e.g. "30m"). */
+  keepAlive?: string
 }
 
 export type ChatEvent =
@@ -38,4 +40,6 @@ export interface Provider {
   pull(model: string, onProgress: (p: PullProgress) => void): Promise<void>
   capabilities(model: string): Promise<ModelCapabilities>
   chat(req: ChatRequest): AsyncIterable<ChatEvent>
+  /** Optional: preload the model into memory so the first real turn is fast. */
+  warm?(model: string, keepAlive?: string): Promise<void>
 }

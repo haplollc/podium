@@ -34,6 +34,17 @@ export class OllamaProvider implements Provider {
     }
   }
 
+  /** Preload the model (empty generate) so the first real turn isn't a cold start. */
+  async warm(model: string, keepAlive = '30m'): Promise<void> {
+    try {
+      await fetch(`${this.base}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model, prompt: '', stream: false, keep_alive: keepAlive }),
+      })
+    } catch { /* best-effort warmup */ }
+  }
+
   async capabilities(model: string): Promise<ModelCapabilities> {
     const r = await fetch(`${this.base}/api/show`, {
       method: 'POST',
@@ -60,6 +71,7 @@ export class OllamaProvider implements Provider {
         })),
         tools: req.tools?.map(t => ({ type: 'function', function: t })),
         stream: true,
+        keep_alive: req.keepAlive,
         options: { num_ctx: req.numCtx, temperature: req.temperature ?? 0.2 },
       }),
     })
