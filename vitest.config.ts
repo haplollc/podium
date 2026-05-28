@@ -12,6 +12,7 @@ export default defineConfig({
       '@maestro/core': pkg('core'),
       '@maestro/tools': pkg('tools'),
       '@maestro/tui': pkg('tui'),
+      '@maestro/skills': pkg('skills'),
     },
   },
   test: {

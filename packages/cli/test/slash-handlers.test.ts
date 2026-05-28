@@ -9,6 +9,10 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     openModelPicker: vi.fn(),
     listModels: vi.fn(async () => ['qwen2.5-coder:7b']),
     pull: vi.fn(async () => {}),
+    listSkills: () => ['commit'],
+    hasSkill: (n) => n === 'commit',
+    runSkill: vi.fn(async (n, a) => `running ${n} ${a}`),
+    togglePlan: vi.fn(() => true),
     ...over,
   }
 }
@@ -48,7 +52,21 @@ describe('runSlash', () => {
     await runSlash({ name: 'pull', args: 'gpt-oss:20b' }, ctx({ pull }))
     expect(pull).toHaveBeenCalledWith('gpt-oss:20b')
   })
-  it('unknown command is reported', async () => {
+  it('skills lists discovered skills', async () => {
+    expect(await runSlash({ name: 'skills', args: '' }, ctx())).toContain('commit')
+  })
+  it('plan toggles plan mode', async () => {
+    const togglePlan = vi.fn(() => true)
+    expect(await runSlash({ name: 'plan', args: '' }, ctx({ togglePlan }))).toContain('ON')
+    expect(togglePlan).toHaveBeenCalled()
+  })
+  it('dispatches /<skill-name> to runSkill', async () => {
+    const runSkill = vi.fn(async () => 'commit body')
+    const out = await runSlash({ name: 'commit', args: '-m hi' }, ctx({ runSkill }))
+    expect(runSkill).toHaveBeenCalledWith('commit', '-m hi')
+    expect(out).toBe('commit body')
+  })
+  it('unknown command (not a skill) is reported', async () => {
     expect(await runSlash({ name: 'wat', args: '' }, ctx())).toContain('Unknown command')
   })
 })

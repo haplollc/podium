@@ -17,6 +17,16 @@ describe('buildSystemPrompt', () => {
     const p = buildSystemPrompt({ cwd: '/p', os: 'darwin', toolNames: ['Read', 'Write', 'Bash'] })
     expect(p).toContain('Read, Write, Bash')
   })
+
+  it('includes optional memory, skill listing, and plan-mode sections', () => {
+    const p = buildSystemPrompt({
+      cwd: '/p', os: 'darwin', toolNames: ['Read'],
+      memory: 'Use tabs not spaces.', skillListing: '- commit: make a commit', planMode: true,
+    })
+    expect(p).toContain('PLAN MODE')
+    expect(p).toContain('Use tabs not spaces.')
+    expect(p).toContain('- commit: make a commit')
+  })
 })
 
 function fakeProvider(scripts: ChatEvent[][]): Provider {

@@ -1,5 +1,5 @@
 import type { Provider, ChatMessage, ToolCall } from '@maestro/providers'
-import type { Tool, TodoStore } from '@maestro/tools'
+import type { Tool, TodoStore, ToolContextSkills } from '@maestro/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
 import { extractToolCalls } from './tool-parse.js'
@@ -24,6 +24,14 @@ export interface RunTurnOpts {
   maxRepairs?: number
   /** Shared todo store passed to tools (e.g. TodoWrite). */
   todos?: TodoStore
+  /** Skill registry passed to the Skill tool. */
+  skills?: ToolContextSkills
+  /** Subagent spawner passed to the Task tool. */
+  spawnAgent?: (prompt: string) => Promise<string>
+  /** Plan-mode exit handler passed to the ExitPlanMode tool. */
+  exitPlan?: (plan: string) => Promise<void>
+  /** When true, force plan (read-only) permission mode. */
+  planMode?: boolean
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -40,7 +48,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
   const buffer = opts.compactBuffer ?? 1500
   const toolSchemas = tools.map(t => t.schema)
 
-  const mode = opts.mode ?? 'default'
+  const mode = opts.planMode ? 'plan' : (opts.mode ?? 'default')
   let repairs = 0
   let finalText = ''
   for (let step = 0; step < maxSteps; step++) {
@@ -108,7 +116,13 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
       let result: string
       try {
         result = tool
-          ? await tool.run(call.arguments, { cwd: opts.cwd ?? process.cwd(), todos: opts.todos })
+          ? await tool.run(call.arguments, {
+              cwd: opts.cwd ?? process.cwd(),
+              todos: opts.todos,
+              skills: opts.skills,
+              spawnAgent: opts.spawnAgent,
+              exitPlan: opts.exitPlan,
+            })
           : `Error: unknown tool ${call.name}`
       } catch (e) {
         result = `Error: ${(e as Error).message}`

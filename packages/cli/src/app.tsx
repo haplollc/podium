@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import os from 'node:os'
 import { Box, Text } from 'ink'
 import { computeSystemInfo, type SystemInfo } from '@maestro/hardware'
 import { OllamaProvider, loadCatalog } from '@maestro/providers'
@@ -7,15 +8,16 @@ import {
   ContextManager, buildSystemPrompt, runTurn, compact, parseSlash,
   type ContextStats, type PermissionMode,
 } from '@maestro/core'
-import { allTools, type TodoItem, type TodoStore } from '@maestro/tools'
+import { allTools, baseTools, type TodoItem, type TodoStore } from '@maestro/tools'
+import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing } from '@maestro/skills'
 import { SetupWizard, Repl, PermissionPrompt, type TranscriptEntry } from '@maestro/tui'
 import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
+import { loadMemory } from './memory.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
 export function decideStartScreen(cfg: MaestroConfig | null, health: HealthStatus): StartScreen {
-  // Nothing works without a running backend — surface that first.
   if (!health.running) return 'backend-error'
   if (!cfg) return 'setup'
   return 'repl'
@@ -35,9 +37,14 @@ export function App(): React.ReactElement {
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<PendingPermission | null>(null)
   const [todos, setTodos] = useState<TodoItem[]>([])
+  const [planMode, setPlanMode] = useState(false)
 
   const cmRef = useRef<ContextManager | null>(null)
   const todosRef = useRef<TodoItem[]>([])
+  const planRef = useRef(false)
+  const registryRef = useRef<SkillRegistry>(new SkillRegistry([]))
+  const memoryRef = useRef('')
+
   const todoStore: TodoStore = {
     set: (items) => { todosRef.current = items; setTodos(items) },
     get: () => todosRef.current,
@@ -45,10 +52,14 @@ export function App(): React.ReactElement {
 
   useEffect(() => {
     void (async () => {
-      const [s, c, health, existing] = await Promise.all([
+      const [s, c, health, existing, skillMetas, mem] = await Promise.all([
         computeSystemInfo(), loadCatalog(), provider.health(), loadConfig(),
+        discoverSkills(defaultSkillRoots(os.homedir(), process.cwd())),
+        loadMemory(process.cwd(), os.homedir()),
       ])
       setSys(s); setCatalog(c); setCfg(existing)
+      registryRef.current = new SkillRegistry(skillMetas)
+      memoryRef.current = mem
       if (health.running) setInstalled(new Set((await provider.listLocal()).map(m => m.name)))
       const decided = decideStartScreen(existing, health)
       if (decided === 'repl' && existing) initRepl(existing)
@@ -78,6 +89,65 @@ export function App(): React.ReactElement {
     return out
   }
 
+  function systemPrompt(): string {
+    return buildSystemPrompt({
+      cwd: process.cwd(), os: process.platform,
+      toolNames: allTools.map(t => t.schema.name),
+      memory: memoryRef.current || undefined,
+      skillListing: buildSkillListing(registryRef.current.list()) || undefined,
+      planMode: planRef.current,
+    })
+  }
+
+  function askPermission(call: ToolCall): Promise<boolean> {
+    return new Promise(resolve => setPending({ call, resolve }))
+  }
+
+  async function spawnAgent(prompt: string): Promise<string> {
+    if (!cfg) return 'Error: not configured.'
+    const cm2 = new ContextManager({ window: cfg.contextSize, outputReserve: 2000 })
+    cm2.add({ role: 'user', content: prompt })
+    return runTurn({
+      provider, model: cfg.model, cm: cm2, tools: baseTools,
+      systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: baseTools.map(t => t.schema.name) }),
+      numCtx: cfg.contextSize, mode: 'default', todos: todoStore,
+    })
+  }
+
+  async function exitPlan(plan: string): Promise<void> {
+    push({ role: 'assistant', text: `Plan ready for approval:\n${plan}` })
+    planRef.current = false
+    setPlanMode(false)
+  }
+
+  /** Run one agent turn over the given user content; returns the final reply. */
+  async function runAgentTurn(userContent: string, showAssistant: boolean): Promise<string> {
+    const cm = cmRef.current
+    if (!cm || !cfg) return ''
+    cm.add({ role: 'user', content: userContent })
+    setBusy(true)
+    try {
+      const reply = await runTurn({
+        provider, model: cfg.model, cm, tools: allTools,
+        systemPrompt: systemPrompt(),
+        numCtx: cfg.contextSize,
+        mode: (cfg.mode ?? 'default') as PermissionMode,
+        planMode: planRef.current,
+        todos: todoStore,
+        skills: registryRef.current,
+        spawnAgent,
+        exitPlan,
+        onPermissionAsk: askPermission,
+        onToolStart: (call) => push({ role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` }),
+      })
+      if (showAssistant && reply) push({ role: 'assistant', text: reply })
+      return reply
+    } finally {
+      setStats(cm.stats())
+      setBusy(false)
+    }
+  }
+
   const slashCtx: SlashCtx = {
     stats: () => cmRef.current?.stats() ?? stats,
     clear: () => {
@@ -94,16 +164,22 @@ export function App(): React.ReactElement {
     openModelPicker: () => setScreen('setup'),
     listModels: async () => (await provider.listLocal()).map(m => m.name),
     pull: async (model) => { await provider.pull(model, () => {}) },
-  }
-
-  function askPermission(call: ToolCall): Promise<boolean> {
-    return new Promise(resolve => setPending({ call, resolve }))
+    listSkills: () => registryRef.current.list().map(m => m.name),
+    hasSkill: (name) => registryRef.current.has(name),
+    runSkill: async (name, args) => {
+      const body = await registryRef.current.getBody(name, args)
+      if (body == null) return `Unknown skill: ${name}`
+      return (await runAgentTurn(body, false)) || '(skill complete)'
+    },
+    togglePlan: () => {
+      planRef.current = !planRef.current
+      setPlanMode(planRef.current)
+      return planRef.current
+    },
   }
 
   async function onSubmit(text: string) {
-    const cm = cmRef.current
-    if (!cm || !cfg || !sys || busy) return
-
+    if (!cmRef.current || !cfg || !sys || busy) return
     const slash = parseSlash(text)
     if (slash) {
       push({ role: 'user', text })
@@ -111,25 +187,8 @@ export function App(): React.ReactElement {
       push({ role: 'assistant', text: msg })
       return
     }
-
-    cm.add({ role: 'user', content: text })
     push({ role: 'user', text })
-    setBusy(true)
-    try {
-      const reply = await runTurn({
-        provider, model: cfg.model, cm, tools: allTools,
-        systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: allTools.map(t => t.schema.name) }),
-        numCtx: cfg.contextSize,
-        mode: (cfg.mode ?? 'default') as PermissionMode,
-        todos: todoStore,
-        onPermissionAsk: askPermission,
-        onToolStart: (call) => push({ role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` }),
-      })
-      if (reply) push({ role: 'assistant', text: reply })
-    } finally {
-      setStats(cm.stats())
-      setBusy(false)
-    }
+    await runAgentTurn(text, true)
   }
 
   if (screen === 'loading' || !sys) return <Text>Starting Maestro…</Text>
@@ -152,6 +211,7 @@ export function App(): React.ReactElement {
 
   return (
     <Box flexDirection="column">
+      {planMode && <Text color="magenta">— PLAN MODE (read-only) —</Text>}
       {todos.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
           {todos.map((t, i) => (

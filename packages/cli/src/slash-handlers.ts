@@ -8,11 +8,15 @@ export interface SlashCtx {
   openModelPicker(): void
   listModels(): Promise<string[]>
   pull(model: string): Promise<void>
+  listSkills(): string[]
+  hasSkill(name: string): boolean
+  runSkill(name: string, args: string): Promise<string>
+  togglePlan(): boolean
 }
 
-const HELP = 'Commands: /model · /models · /pull <name> · /context · /compact · /clear · /help'
+const HELP = 'Commands: /model · /models · /pull <name> · /skills · /plan · /context · /compact · /clear · /help · /<skill>'
 
-/** Execute a builtin slash command, returning a line to show in the transcript. */
+/** Execute a builtin slash command (or a /<skill-name>), returning a transcript line. */
 export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string> {
   switch (cmd.name) {
     case 'help':
@@ -36,7 +40,12 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
       if (!cmd.args) return 'Usage: /pull <model>'
       await ctx.pull(cmd.args)
       return `Pulled ${cmd.args}.`
+    case 'skills':
+      return `Skills: ${ctx.listSkills().join(', ') || '(none)'}`
+    case 'plan':
+      return `Plan mode ${ctx.togglePlan() ? 'ON — read-only until you /plan again' : 'OFF'}.`
     default:
+      if (ctx.hasSkill(cmd.name)) return ctx.runSkill(cmd.name, cmd.args)
       return `Unknown command: /${cmd.name}. Try /help`
   }
 }
