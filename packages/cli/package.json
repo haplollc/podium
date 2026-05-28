@@ -1,0 +1,14 @@
+{
+  "name": "maestro-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "maestro": "./bin/maestro.js" },
+  "main": "./dist/index.js",
+  "scripts": { "build": "tsup src/index.ts --format esm" },
+  "dependencies": {
+    "ink": "^5.0.0", "react": "^18.3.0",
+    "@maestro/core": "workspace:*", "@maestro/providers": "workspace:*",
+    "@maestro/hardware": "workspace:*", "@maestro/tools": "workspace:*",
+    "@maestro/tui": "workspace:*"
+  }
+}

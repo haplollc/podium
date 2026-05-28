@@ -1,0 +1,15 @@
+{
+  "name": "@maestro/tui",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "scripts": { "build": "tsup src/index.ts --format esm --dts" },
+  "dependencies": {
+    "ink": "^5.0.0", "react": "^18.3.0",
+    "@maestro/core": "workspace:*", "@maestro/providers": "workspace:*",
+    "@maestro/hardware": "workspace:*", "@maestro/tools": "workspace:*"
+  },
+  "devDependencies": { "ink-testing-library": "^4.0.0", "@types/react": "^18.3.0" }
+}

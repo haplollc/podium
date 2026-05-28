@@ -1,0 +1,10 @@
+{
+  "name": "@maestro/core",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "scripts": { "build": "tsup src/index.ts --format esm --dts" },
+  "dependencies": { "@maestro/providers": "workspace:*", "@maestro/tools": "workspace:*" }
+}
