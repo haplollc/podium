@@ -1,8 +1,11 @@
 {
   "models": [
+    { "id": "qwen2.5-coder:1.5b", "label": "Qwen2.5-Coder 1.5B", "params": "1.5B",
+      "quant": "Q4_K_M", "weightsGB": 1.0, "kvPerKTokenGB": 0.04, "defaultContext": 8192,
+      "tools": true, "minTierGB": 8, "recommendedForGB": [8] },
     { "id": "qwen2.5-coder:3b", "label": "Qwen2.5-Coder 3B", "params": "3B",
       "quant": "Q4_K_M", "weightsGB": 2.0, "kvPerKTokenGB": 0.06, "defaultContext": 8192,
-      "tools": true, "minTierGB": 8, "recommendedForGB": [8] },
+      "tools": true, "minTierGB": 8, "recommendedForGB": [] },
     { "id": "qwen2.5-coder:7b", "label": "Qwen2.5-Coder 7B", "params": "7B",
       "quant": "Q4_K_M", "weightsGB": 4.7, "kvPerKTokenGB": 0.12, "defaultContext": 16384,
       "tools": true, "minTierGB": 16, "recommendedForGB": [16] },

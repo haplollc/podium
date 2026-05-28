@@ -4,8 +4,15 @@ import { loadCatalog, recommendedFor } from '../src/catalog.js'
 describe('catalog', () => {
   it('loads all models from catalog.json', async () => {
     const cat = await loadCatalog()
-    expect(cat.length).toBeGreaterThanOrEqual(5)
+    expect(cat.length).toBeGreaterThanOrEqual(6)
     expect(cat.find(m => m.id === 'qwen2.5-coder:7b')).toBeTruthy()
+  })
+
+  it('recommends the 1.5B model for the 8GB tier; both 1.5B and 3B are 8GB-eligible', async () => {
+    const cat = await loadCatalog()
+    expect(recommendedFor(cat, 8)?.id).toBe('qwen2.5-coder:1.5b')
+    expect(cat.filter(m => m.minTierGB === 8).map(m => m.id).sort())
+      .toEqual(['qwen2.5-coder:1.5b', 'qwen2.5-coder:3b'])
   })
 
   it('recommends the 7B model for a 16GB machine', async () => {

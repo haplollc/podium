@@ -1,14 +1,26 @@
 {
   "name": "maestro-cli",
   "version": "0.1.0",
+  "description": "A local-model terminal coding agent, optimized for small context windows and modest Macs.",
   "type": "module",
   "bin": { "maestro": "./bin/maestro.js" },
   "main": "./dist/index.js",
-  "scripts": { "build": "tsup src/index.ts --format esm" },
+  "files": ["dist", "bin"],
+  "engines": { "node": ">=20" },
+  "publishConfig": { "access": "public" },
+  "scripts": { "build": "tsup" },
   "dependencies": {
-    "ink": "^5.0.0", "react": "^18.3.0",
-    "@maestro/core": "workspace:*", "@maestro/providers": "workspace:*",
-    "@maestro/hardware": "workspace:*", "@maestro/tools": "workspace:*",
-    "@maestro/tui": "workspace:*", "@maestro/skills": "workspace:*"
+    "ink": "^5.0.0",
+    "react": "^18.3.0",
+    "execa": "^9.4.0",
+    "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@maestro/core": "workspace:*",
+    "@maestro/providers": "workspace:*",
+    "@maestro/hardware": "workspace:*",
+    "@maestro/tools": "workspace:*",
+    "@maestro/tui": "workspace:*",
+    "@maestro/skills": "workspace:*"
   }
 }

@@ -26,6 +26,19 @@ importers:
 
   packages/cli:
     dependencies:
+      execa:
+        specifier: ^9.4.0
+        version: 9.6.1
+      ink:
+        specifier: ^5.0.0
+        version: 5.2.1(@types/react@18.3.29)(react@18.3.1)
+      react:
+        specifier: ^18.3.0
+        version: 18.3.1
+      yaml:
+        specifier: ^2.6.0
+        version: 2.9.0
+    devDependencies:
       '@maestro/core':
         specifier: workspace:*
         version: link:../core
@@ -44,12 +57,6 @@ importers:
       '@maestro/tui':
         specifier: workspace:*
         version: link:../tui
-      ink:
-        specifier: ^5.0.0
-        version: 5.2.1(@types/react@18.3.29)(react@18.3.1)
-      react:
-        specifier: ^18.3.0
-        version: 18.3.1
 
   packages/core:
     dependencies:
@@ -67,6 +74,9 @@ importers:
       '@maestro/hardware':
         specifier: workspace:*
         version: link:../hardware
+      execa:
+        specifier: ^9.4.0
+        version: 9.6.1
 
   packages/skills:
     dependencies:

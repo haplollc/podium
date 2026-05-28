@@ -1,3 +1,3 @@
 #!/usr/bin/env node
 import { main } from '../dist/index.js'
-main()
+main().catch((e) => { console.error(e); process.exit(1) })

@@ -32,6 +32,8 @@ export interface RunTurnOpts {
   exitPlan?: (plan: string) => Promise<void>
   /** When true, force plan (read-only) permission mode. */
   planMode?: boolean
+  /** PreToolUse hook gate; return false to block the tool. */
+  preToolUse?: (call: ToolCall) => Promise<boolean>
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -110,6 +112,10 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
           cm.add({ role: 'tool', content: `Permission denied by user: ${call.name}.`, tool_call_id: call.id })
           continue
         }
+      }
+      if (opts.preToolUse && !(await opts.preToolUse(call))) {
+        cm.add({ role: 'tool', content: `Blocked by PreToolUse hook: ${call.name}.`, tool_call_id: call.id })
+        continue
       }
       opts.onToolStart?.(call)
       const tool = tools.find(t => t.schema.name === call.name)

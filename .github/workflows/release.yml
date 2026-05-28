@@ -1,0 +1,67 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd packages/cli
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build
+        run: |
+          pnpm -r build
+          pnpm --filter maestro-cli build
+
+      - name: Verify bundle is self-contained
+        run: |
+          # Match real import/require statements (not the embedded package.json metadata).
+          if grep -nE 'from ?"@maestro/|require\("@maestro/|import\("@maestro/' packages/cli/dist/index.js; then
+            echo "Bundle still imports @maestro/* — not self-contained" && exit 1
+          fi
+          echo "Bundle is self-contained."
+
+      - name: Publish to npm
+        run: pnpm --filter maestro-cli publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Bump Homebrew formula
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          URL="https://registry.npmjs.org/maestro-cli/-/maestro-cli-${VERSION}.tgz"
+          # Wait for the tarball to be available, then hash it.
+          for i in $(seq 1 10); do
+            if curl -fsSL "$URL" -o /tmp/maestro.tgz; then break; fi
+            sleep 6
+          done
+          SHA=$(shasum -a 256 /tmp/maestro.tgz | awk '{print $1}')
+          sed -i "s|url \".*\"|url \"${URL}\"|" Formula/maestro.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA}\"|" Formula/maestro.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/maestro.rb packages/cli/package.json
+          git commit -m "release: maestro ${VERSION}"
+          git push origin HEAD:main

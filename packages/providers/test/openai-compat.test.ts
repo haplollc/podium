@@ -1,0 +1,47 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { OpenAICompatProvider } from '../src/openai-compat.js'
+
+function sse(lines: string[]): Response {
+  const body = lines.map(l => `data: ${l}\n\n`).join('')
+  return new Response(body, { status: 200 })
+}
+function jsonResponse(obj: unknown): Response {
+  return new Response(JSON.stringify(obj), { status: 200 })
+}
+
+describe('OpenAICompatProvider', () => {
+  beforeEach(() => vi.restoreAllMocks())
+
+  it('health() and listLocal() use /models', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ data: [{ id: 'foo' }, { id: 'bar' }] })))
+    const p = new OpenAICompatProvider('mlx', 'http://localhost:8080/v1')
+    expect((await p.health()).running).toBe(true)
+    expect((await p.listLocal()).map(m => m.name)).toEqual(['foo', 'bar'])
+  })
+
+  it('chat() streams text and assembles a fragmented tool call', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sse([
+      JSON.stringify({ choices: [{ delta: { content: 'Hel' } }] }),
+      JSON.stringify({ choices: [{ delta: { content: 'lo' } }] }),
+      JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'Write' } }] } }] }),
+      JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"file_path":"a",' } }] } }] }),
+      JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"content":"x"}' } }] } }] }),
+      '[DONE]',
+    ])))
+    const p = new OpenAICompatProvider('lmstudio', 'http://localhost:1234/v1')
+    const events: Array<{ type: string }> = []
+    for await (const e of p.chat({ model: 'm', messages: [] })) events.push(e)
+
+    const text = events.filter((e): e is { type: 'text'; delta: string } => e.type === 'text').map(e => e.delta).join('')
+    expect(text).toBe('Hello')
+    const call = events.find((e): e is { type: 'tool_call'; call: { name: string; arguments: Record<string, unknown> } } => e.type === 'tool_call')
+    expect(call?.call.name).toBe('Write')
+    expect(call?.call.arguments).toEqual({ file_path: 'a', content: 'x' })
+    expect(events.at(-1)?.type).toBe('done')
+  })
+
+  it('pull() throws for the base adapter', async () => {
+    const p = new OpenAICompatProvider('mlx', 'http://localhost:8080/v1')
+    await expect(p.pull('m', () => {})).rejects.toThrow(/not supported/)
+  })
+})

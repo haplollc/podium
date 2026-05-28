@@ -14,6 +14,7 @@ import { SetupWizard, Repl, PermissionPrompt, type TranscriptEntry } from '@maes
 import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
 import { loadMemory } from './memory.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
+import { loadHooks, runHooks, type HookConfig } from './hooks.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -44,6 +45,7 @@ export function App(): React.ReactElement {
   const planRef = useRef(false)
   const registryRef = useRef<SkillRegistry>(new SkillRegistry([]))
   const memoryRef = useRef('')
+  const hooksRef = useRef<HookConfig>({})
 
   const todoStore: TodoStore = {
     set: (items) => { todosRef.current = items; setTodos(items) },
@@ -52,14 +54,17 @@ export function App(): React.ReactElement {
 
   useEffect(() => {
     void (async () => {
-      const [s, c, health, existing, skillMetas, mem] = await Promise.all([
+      const [s, c, health, existing, skillMetas, mem, hooks] = await Promise.all([
         computeSystemInfo(), loadCatalog(), provider.health(), loadConfig(),
         discoverSkills(defaultSkillRoots(os.homedir(), process.cwd())),
         loadMemory(process.cwd(), os.homedir()),
+        loadHooks(),
       ])
       setSys(s); setCatalog(c); setCfg(existing)
       registryRef.current = new SkillRegistry(skillMetas)
       memoryRef.current = mem
+      hooksRef.current = hooks
+      void runHooks(hooks, 'SessionStart', { cwd: process.cwd() })
       if (health.running) setInstalled(new Set((await provider.listLocal()).map(m => m.name)))
       const decided = decideStartScreen(existing, health)
       if (decided === 'repl' && existing) initRepl(existing)
@@ -138,6 +143,7 @@ export function App(): React.ReactElement {
         spawnAgent,
         exitPlan,
         onPermissionAsk: askPermission,
+        preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
         onToolStart: (call) => push({ role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` }),
       })
       if (showAssistant && reply) push({ role: 'assistant', text: reply })
@@ -158,6 +164,7 @@ export function App(): React.ReactElement {
     },
     compact: async () => {
       if (!cmRef.current) return
+      await runHooks(hooksRef.current, 'PreCompact', { reason: 'manual' })
       await compact(cmRef.current, { prefixCount: 1, summarize })
       setStats(cmRef.current.stats())
     },
@@ -188,6 +195,7 @@ export function App(): React.ReactElement {
       return
     }
     push({ role: 'user', text })
+    await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: text })
     await runAgentTurn(text, true)
   }
 

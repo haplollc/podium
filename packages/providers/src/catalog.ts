@@ -1,6 +1,6 @@
-import { readFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
+// Static import so the catalog is inlined into the bundle — no runtime file
+// path resolution (which breaks once the package is published via npm/brew).
+import catalogData from '../../../models/catalog.json'
 
 export interface CatalogModel {
   id: string
@@ -15,15 +15,8 @@ export interface CatalogModel {
   recommendedForGB: number[]
 }
 
-// models/catalog.json lives at the repo root, two levels up from dist/.
-function catalogPath(): string {
-  const here = path.dirname(fileURLToPath(import.meta.url))
-  return path.resolve(here, '../../../models/catalog.json')
-}
-
-export async function loadCatalog(p = catalogPath()): Promise<CatalogModel[]> {
-  const raw = await readFile(p, 'utf8')
-  return JSON.parse(raw).models as CatalogModel[]
+export async function loadCatalog(): Promise<CatalogModel[]> {
+  return (catalogData as { models: CatalogModel[] }).models
 }
 
 /** Best recommended model whose recommendedForGB includes this tier, else the
