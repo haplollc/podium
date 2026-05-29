@@ -15,6 +15,7 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     runSkill: vi.fn(async (n, a) => `running ${n} ${a}`),
     togglePlan: vi.fn(() => true),
     soul: () => 'be kind and concise',
+    toggleMetrics: vi.fn(() => true),
     ...over,
   }
 }
@@ -75,6 +76,11 @@ describe('runSlash', () => {
   })
   it('soul shows the active personality', async () => {
     expect(await runSlash({ name: 'soul', args: '' }, ctx())).toContain('be kind and concise')
+  })
+  it('metrics toggles the dashboard', async () => {
+    const toggleMetrics = vi.fn(() => true)
+    expect(await runSlash({ name: 'metrics', args: '' }, ctx({ toggleMetrics }))).toContain('ON')
+    expect(toggleMetrics).toHaveBeenCalled()
   })
   it('unknown command (not a skill) is reported', async () => {
     expect(await runSlash({ name: 'wat', args: '' }, ctx())).toContain('Unknown command')

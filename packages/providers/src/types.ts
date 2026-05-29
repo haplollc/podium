@@ -1,4 +1,5 @@
 export interface LocalModel { name: string; sizeBytes: number }
+export interface RunningModel { name: string; sizeBytes: number; sizeVramBytes: number }
 export interface PullProgress { status: string; completed?: number; total?: number }
 export interface ModelCapabilities { tools: boolean; contextLength?: number }
 
@@ -44,4 +45,6 @@ export interface Provider {
   warm?(model: string, keepAlive?: string): Promise<void>
   /** Optional: delete a downloaded model to free disk space. */
   remove?(model: string): Promise<void>
+  /** Optional: list currently-loaded models and their memory footprint. */
+  ps?(): Promise<RunningModel[]>
 }

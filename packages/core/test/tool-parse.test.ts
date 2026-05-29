@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { extractToolCalls } from '../src/tool-parse.js'
+import { extractToolCalls, cleanModelText } from '../src/tool-parse.js'
 
 const KNOWN = ['Write', 'Read', 'Bash']
+
+describe('cleanModelText', () => {
+  it('strips empty/leftover code fences and trims', () => {
+    expect(cleanModelText('```json\n\n```')).toBe('')
+    expect(cleanModelText('Here you go:\n```json\n```\n')).toBe('Here you go:')
+    expect(cleanModelText('All set.')).toBe('All set.')
+  })
+  it('leaves a real fenced code block alone', () => {
+    expect(cleanModelText('```py\nprint("hi")\n```')).toContain('print("hi")')
+  })
+})
 
 describe('extractToolCalls', () => {
   it('parses a bare JSON tool call', () => {

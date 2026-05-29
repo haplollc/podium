@@ -7,6 +7,6 @@ export { MLXProvider } from './mlx.js'
 export { getProvider, detectBackends } from './factory.js'
 export type { BackendId } from './factory.js'
 export type {
-  Provider, LocalModel, PullProgress, ModelCapabilities, ChatMessage,
+  Provider, LocalModel, RunningModel, PullProgress, ModelCapabilities, ChatMessage,
   ToolCall, ToolSchema, ChatRequest, ChatEvent, HealthStatus,
 } from './types.js'

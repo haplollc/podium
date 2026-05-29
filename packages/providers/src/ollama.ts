@@ -45,6 +45,13 @@ export class OllamaProvider implements Provider {
     } catch { /* best-effort warmup */ }
   }
 
+  /** Currently-loaded models and their memory footprint (GET /api/ps). */
+  async ps(): Promise<{ name: string; sizeBytes: number; sizeVramBytes: number }[]> {
+    const r = await fetch(`${this.base}/api/ps`)
+    const data = await r.json() as { models?: { name: string; size: number; size_vram: number }[] }
+    return (data.models ?? []).map(m => ({ name: m.name, sizeBytes: m.size, sizeVramBytes: m.size_vram }))
+  }
+
   /** Delete a downloaded model (frees disk). */
   async remove(model: string): Promise<void> {
     const r = await fetch(`${this.base}/api/delete`, {

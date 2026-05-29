@@ -10,7 +10,7 @@ import {
 } from '@podium/core'
 import { allTools, baseTools, type TodoItem, type TodoStore } from '@podium/tools'
 import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing, mergeSkills, builtinSkills } from '@podium/skills'
-import { SetupWizard, Repl, PermissionPrompt, Banner, type TranscriptEntry } from '@podium/tui'
+import { SetupWizard, Repl, PermissionPrompt, Banner, type TranscriptEntry, type MetricsData } from '@podium/tui'
 import { loadConfig, saveConfig, type PodiumConfig } from './config.js'
 import { loadMemory } from './memory.js'
 import { loadSoul, DEFAULT_SOUL } from './soul.js'
@@ -45,6 +45,8 @@ export function App(): React.ReactElement {
   const [planMode, setPlanMode] = useState(false)
   const [status, setStatus] = useState('')       // spinner label while busy
   const [streaming, setStreaming] = useState('')  // live assistant text
+  const [metricsOn, setMetricsOn] = useState(false)
+  const [metricsData, setMetricsData] = useState<MetricsData | null>(null)
 
   const KEEP_ALIVE = '30m'
 
@@ -56,6 +58,8 @@ export function App(): React.ReactElement {
   const soulRef = useRef(DEFAULT_SOUL)
   const hooksRef = useRef<HookConfig>({})
   const verbRef = useRef(0)
+  const genStartRef = useRef<number | null>(null)  // turn start (ms) for tok/s
+  const genCharsRef = useRef(0)                     // streamed chars this turn
 
   const todoStore: TodoStore = {
     set: (items) => { todosRef.current = items; setTodos(items) },
@@ -101,6 +105,34 @@ export function App(): React.ReactElement {
   }
 
   function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
+
+  /** Build a live metrics snapshot (system RAM + model resident memory + tok/s). */
+  async function refreshMetrics() {
+    const cm = cmRef.current
+    if (!cm || !cfg) return
+    const total = os.totalmem() / 1024 ** 3
+    const ramUsedGB = (os.totalmem() - os.freemem()) / 1024 ** 3
+    let modelMemGB: number | null = null
+    try {
+      const loaded = (await provider.ps?.()) ?? []
+      const me = loaded.find(x => x.name === cfg.model) ?? loaded[0]
+      if (me) modelMemGB = me.sizeBytes / 1024 ** 3
+    } catch { /* backend may not support /api/ps */ }
+    const start = genStartRef.current
+    const tokensPerSec = start ? (genCharsRef.current / 4) / Math.max(0.001, (Date.now() - start) / 1000) : null
+    setMetricsData({
+      model: cfg.model, contextStats: cm.stats(), modelMemGB,
+      ramUsedGB, ramTotalGB: Math.round(total), tokensPerSec,
+    })
+  }
+
+  // Poll metrics while the dashboard is on.
+  useEffect(() => {
+    if (!metricsOn) { setMetricsData(null); return }
+    void refreshMetrics()
+    const id = setInterval(() => { void refreshMetrics() }, 1200)
+    return () => clearInterval(id)
+  }, [metricsOn])
 
   /** Refresh the installed-model set from the backend, then show the setup screen. */
   async function refreshInstalledThenOpen() {
@@ -163,6 +195,8 @@ export function App(): React.ReactElement {
     setBusy(true)
     setStatus('Loading model…')   // until the model emits its first token
     setStreaming('')
+    genStartRef.current = Date.now()
+    genCharsRef.current = 0
     try {
       const reply = await runTurn({
         provider, model: cfg.model, cm, tools: allTools,
@@ -176,7 +210,7 @@ export function App(): React.ReactElement {
         spawnAgent,
         exitPlan,
         onModelStart: () => { verbRef.current = (verbRef.current + 1) % THINKING_VERBS.length; setStatus(THINKING_VERBS[verbRef.current]) },
-        onText: (delta) => setStreaming(s => s + delta),
+        onText: (delta) => { genCharsRef.current += delta.length; setStreaming(s => s + delta) },
         onPermissionAsk: askPermission,
         preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
         onToolStart: (call) => {
@@ -184,10 +218,20 @@ export function App(): React.ReactElement {
           setStatus(`${call.name}…`)
           push({ role: 'tool', text: toolLabel(call) })
         },
+        onToolResult: (_call, result) => {
+          const out = result.trim()
+          if (!out) return
+          const lines = out.split('\n')
+          const shown = lines.length > 12
+            ? `${lines.slice(0, 12).join('\n')}\n… +${lines.length - 12} more lines`
+            : out
+          push({ role: 'output', text: shown })
+        },
       })
       if (showAssistant && reply) push({ role: 'assistant', text: reply })
       return reply
     } finally {
+      genStartRef.current = null
       setStreaming('')
       setStatus('')
       setStats(cm.stats())
@@ -226,6 +270,7 @@ export function App(): React.ReactElement {
       return planRef.current
     },
     soul: () => soulRef.current,
+    toggleMetrics: () => { const next = !metricsOn; setMetricsOn(next); return next },
   }
 
   async function onSubmit(text: string) {
@@ -262,7 +307,7 @@ export function App(): React.ReactElement {
     )
 
   const commandNames = [
-    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'plan', 'context', 'compact', 'clear', 'help',
+    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'context', 'compact', 'clear', 'help',
     ...registryRef.current.list().map(m => m.name),
   ]
 
@@ -282,6 +327,7 @@ export function App(): React.ReactElement {
       <Repl
         stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy}
         streaming={streaming} status={status} commands={commandNames}
+        metrics={metricsOn ? (metricsData ?? undefined) : undefined}
       />
       {pending && (
         <PermissionPrompt

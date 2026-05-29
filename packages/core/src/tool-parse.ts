@@ -29,7 +29,19 @@ export function extractToolCalls(text: string, knownNames: string[]): ParsedTool
     calls.push({ id: `text_${name}_${idx++}`, name, arguments: args as Record<string, unknown> })
     cleaned = cleaned.replace(obj.raw, '')
   }
-  return { calls, cleanedText: cleaned.trim() }
+  return { calls, cleanedText: cleanModelText(cleaned) }
+}
+
+/**
+ * Tidy model text for display: drop empty/leftover code fences (e.g. the
+ * ```json ``` wrappers small models leave behind after a tool call) and trim.
+ */
+export function cleanModelText(text: string): string {
+  return text
+    .replace(/```[a-zA-Z]*[ \t]*\n?[ \t]*```/g, '') // empty fenced blocks
+    .replace(/^[ \t]*```[a-zA-Z]*[ \t]*$/gm, '')     // orphan fence lines
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function stripFences(s: string): string {

@@ -3,8 +3,9 @@ import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import type { ContextStats } from '@podium/core'
 import { ContextMeter } from './ContextMeter.js'
+import { MetricsBar, type MetricsData } from './MetricsBar.js'
 
-export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool'; text: string }
+export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output'; text: string }
 
 export function Repl(props: {
   stats: ContextStats
@@ -14,6 +15,7 @@ export function Repl(props: {
   streaming?: string            // live assistant text being typed out
   status?: string               // spinner label while busy (e.g. "Loading model…")
   commands?: string[]           // command names for /autocomplete
+  metrics?: MetricsData         // live dashboard over the input (toggle with /metrics)
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
@@ -66,13 +68,22 @@ export function Repl(props: {
 
   return (
     <Box flexDirection="column">
-      {props.transcript.map((e, i) => (
-        <Text key={i} color={e.role === 'user' ? 'cyan' : e.role === 'tool' ? 'gray' : undefined}>
-          {e.role === 'user' ? '› ' : e.role === 'tool' ? '  ⚙ ' : ''}{e.text}
-        </Text>
-      ))}
+      {props.transcript.map((e, i) => {
+        if (e.role === 'output') {
+          return (
+            <Box key={i} flexDirection="column" marginLeft={4}>
+              {e.text.split('\n').map((line, j) => <Text key={j} dimColor>{line}</Text>)}
+            </Box>
+          )
+        }
+        return (
+          <Text key={i} color={e.role === 'user' ? 'cyan' : e.role === 'tool' ? 'gray' : undefined}>
+            {e.role === 'user' ? '› ' : e.role === 'tool' ? '  ⚙ ' : ''}{e.text}
+          </Text>
+        )
+      })}
 
-      {props.busy && props.streaming && !/^\s*[{[]/.test(props.streaming)
+      {props.busy && props.streaming && !/```|\{\s*"name"\s*:|^\s*[{[]/.test(props.streaming)
         ? <Text>{props.streaming}<Text color="gray">▍</Text></Text>
         : null}
 
@@ -84,7 +95,7 @@ export function Repl(props: {
       )}
 
       <Box marginTop={1}>
-        <ContextMeter stats={props.stats} />
+        {props.metrics ? <MetricsBar m={props.metrics} /> : <ContextMeter stats={props.stats} />}
       </Box>
 
       <Box

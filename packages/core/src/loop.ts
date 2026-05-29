@@ -2,7 +2,7 @@ import type { Provider, ChatMessage, ToolCall } from '@podium/providers'
 import type { Tool, TodoStore, ToolContextSkills } from '@podium/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
-import { extractToolCalls } from './tool-parse.js'
+import { extractToolCalls, cleanModelText } from './tool-parse.js'
 import { decide, type PermissionMode } from './permission.js'
 
 export interface RunTurnOpts {
@@ -16,6 +16,8 @@ export interface RunTurnOpts {
   compactBuffer?: number
   onText?: (delta: string) => void
   onToolStart?: (call: ToolCall) => void
+  /** Fired with each tool's result so the UI can surface it (e.g. command output). */
+  onToolResult?: (call: ToolCall, result: string) => void
   /** Fired when the model emits its first event of the turn (i.e. it's done loading). */
   onModelStart?: () => void
   maxSteps?: number
@@ -102,7 +104,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         })
         continue
       }
-      finalText = assistantText
+      finalText = cleanModelText(assistantText)
       break
     }
 
@@ -140,6 +142,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         result = `Error: ${(e as Error).message}`
       }
       cm.add({ role: 'tool', content: result, tool_call_id: call.id })
+      opts.onToolResult?.(call, result)
     }
   }
   return finalText
