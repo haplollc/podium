@@ -28,11 +28,12 @@ describe('file tools', () => {
     expect(out).not.toContain('row49')
   })
 
-  it('write creates a file and reports byte count', async () => {
+  it('write creates a file and returns a diff', async () => {
     const f = path.join(dir, 'b.txt')
     const res = await writeTool.run({ file_path: f, content: 'new content' }, { cwd: dir })
     expect(await readFile(f, 'utf8')).toBe('new content')
-    expect(res).toContain('11 bytes')
+    expect(res).toContain('Created b.txt')
+    expect(res).toContain('+ new content')
   })
 
   it('write creates intermediate directories', async () => {
@@ -63,6 +64,7 @@ describe('file tools', () => {
     await writeFile(f, 'a a a')
     const res = await editTool.run({ file_path: f, old_string: 'a', new_string: 'b', replace_all: true }, { cwd: dir })
     expect(await readFile(f, 'utf8')).toBe('b b b')
-    expect(res).toContain('3 replacements')
+    expect(res).toContain('Edited e.txt')
+    expect(res).toContain('+ b b b')
   })
 })

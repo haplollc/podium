@@ -16,6 +16,8 @@ export interface RunTurnOpts {
   compactBuffer?: number
   onText?: (delta: string) => void
   onToolStart?: (call: ToolCall) => void
+  /** Fired with the model's narration on a step that then calls tools, so the UI can persist it. */
+  onStepText?: (text: string) => void
   /** Fired with each tool's result so the UI can surface it (e.g. command output). */
   onToolResult?: (call: ToolCall, result: string) => void
   /** Fired when the model emits its first event of the turn (i.e. it's done loading). */
@@ -135,6 +137,10 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
       finalText = cleanModelText(assistantText)
       break
     }
+
+    // Persist the model's narration for this step (it precedes the tool calls).
+    const stepText = cleanModelText(assistantText)
+    if (stepText) opts.onStepText?.(stepText)
 
     for (const call of effectiveCalls) {
       // Break repeat-loops: if the model fires the exact same call 3+ times, stop

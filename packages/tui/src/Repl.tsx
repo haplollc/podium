@@ -101,9 +101,12 @@ export function Repl(props: {
             const lines = e.text.split('\n')
             return (
               <Box key={i} flexDirection="column" marginLeft={2}>
-                {lines.map((line, j) => (
-                  <Text key={j} dimColor>{j === 0 ? '  ⎿  ' : '     '}{line}</Text>
-                ))}
+                {lines.map((line, j) => {
+                  const prefix = j === 0 ? '  ⎿  ' : '     '
+                  if (/^\+ /.test(line)) return <Text key={j} color="green">{prefix}{line}</Text>
+                  if (/^- /.test(line)) return <Text key={j} color="red">{prefix}{line}</Text>
+                  return <Text key={j} dimColor>{prefix}{line}</Text>
+                })}
               </Box>
             )
           }

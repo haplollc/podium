@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Tool } from './types.js'
+import { diffSummary } from './diff.js'
 
 export const editTool: Tool = {
   schema: {
@@ -29,6 +30,6 @@ export const editTool: Tool = {
     if (count > 1 && !replaceAll) throw new Error(`old_string is not unique (${count} matches); pass replace_all or add context`)
     const updated = replaceAll ? content.split(oldS).join(newS) : content.replace(oldS, newS)
     await writeFile(file, updated)
-    return `Edited ${file} (${replaceAll ? count : 1} replacement${replaceAll && count > 1 ? 's' : ''})`
+    return `Edited ${path.basename(file)}\n${diffSummary(content, updated, path.basename(file))}`
   },
 }

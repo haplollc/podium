@@ -1,6 +1,7 @@
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Tool } from './types.js'
+import { diffSummary } from './diff.js'
 
 export const writeTool: Tool = {
   schema: {
@@ -18,8 +19,11 @@ export const writeTool: Tool = {
   async run(args, ctx) {
     const raw = String(args.file_path)
     const file = path.isAbsolute(raw) ? raw : path.resolve(ctx.cwd, raw)
+    const before = await readFile(file, 'utf8').catch(() => '')
+    const content = String(args.content)
     await mkdir(path.dirname(file), { recursive: true })
-    await writeFile(file, String(args.content))
-    return `Wrote ${String(args.content).length} bytes to ${file}`
+    await writeFile(file, content)
+    const verb = before ? 'Updated' : 'Created'
+    return `${verb} ${path.basename(file)}\n${diffSummary(before, content, path.basename(file))}`
   },
 }

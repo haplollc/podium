@@ -224,6 +224,7 @@ export function App(): React.ReactElement {
         exitPlan,
         onModelStart: () => setStatus('Thinking…'),
         onText: (delta) => { genCharsRef.current += delta.length; setStreaming(s => s + delta) },
+        onStepText: (t) => push({ role: 'assistant', text: t }),
         onPermissionAsk: askPermission,
         preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
         onToolStart: (call) => {
