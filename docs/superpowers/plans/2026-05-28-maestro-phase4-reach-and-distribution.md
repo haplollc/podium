@@ -1,10 +1,10 @@
-# Maestro Phase 4 (Reach & Distribution) Implementation Plan
+# Podium Phase 4 (Reach & Distribution) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or superpowers:executing-plans. Steps use `- [ ]` checkboxes.
 
 **Goal:** Multi-backend support (LM Studio + MLX via an OpenAI-compatible base, plus a backend factory + detection), an 8GB tiny-model tier, a pragmatic hooks subset, CLI commands (`--version`, `--help`, `update`), and real distribution: a bundled npm package, a Homebrew formula, and a GitHub Actions release pipeline.
 
-**Architecture:** A shared `OpenAICompatProvider` (SSE streaming + native tool-call accumulation) that `LMStudioProvider` and `MLXProvider` extend; a `getProvider(backend)` factory and `detectBackends()` probe. A `hooks` module (settings.json-driven command hooks for SessionStart/UserPromptSubmit/PreToolUse/PreCompact) wired into the loop/app. CLI gains argv handling before rendering. The `cli` package builds to a self-contained bundle (`@maestro/*` inlined) so `npm i -g` and Homebrew both work.
+**Architecture:** A shared `OpenAICompatProvider` (SSE streaming + native tool-call accumulation) that `LMStudioProvider` and `MLXProvider` extend; a `getProvider(backend)` factory and `detectBackends()` probe. A `hooks` module (settings.json-driven command hooks for SessionStart/UserPromptSubmit/PreToolUse/PreCompact) wired into the loop/app. CLI gains argv handling before rendering. The `cli` package builds to a self-contained bundle (`@podium/*` inlined) so `npm i -g` and Homebrew both work.
 
 **Tech Stack:** Phase 1–3 stack. No new runtime deps (SSE parsed by hand; `execa` already present).
 
@@ -190,7 +190,7 @@ export async function detectBackends(): Promise<BackendId[]> {
 
 **Files:** Create `packages/cli/src/hooks.ts`; Test `test/hooks.test.ts`; wire into `app.tsx` + `loop.ts` (PreToolUse via `onPermissionAsk`-style hook).
 
-- [ ] **hooks.ts** — load `~/.maestro/settings.json` `{ hooks: { <Event>: [{ command }] } }`; run matching command hooks, passing a JSON payload on stdin; for `PreToolUse`, a hook that exits non-zero or prints `{"decision":"deny"}` blocks the tool.
+- [ ] **hooks.ts** — load `~/.podium/settings.json` `{ hooks: { <Event>: [{ command }] } }`; run matching command hooks, passing a JSON payload on stdin; for `PreToolUse`, a hook that exits non-zero or prints `{"decision":"deny"}` blocks the tool.
 
 ```ts
 import { readFile } from 'node:fs/promises'
@@ -202,7 +202,7 @@ export type HookEvent = 'SessionStart' | 'UserPromptSubmit' | 'PreToolUse' | 'Pr
 interface HookCmd { command: string }
 type HookConfig = Partial<Record<HookEvent, HookCmd[]>>
 
-export async function loadHooks(dir = path.join(os.homedir(), '.maestro')): Promise<HookConfig> {
+export async function loadHooks(dir = path.join(os.homedir(), '.podium')): Promise<HookConfig> {
   try { return (JSON.parse(await readFile(path.join(dir, 'settings.json'), 'utf8')).hooks ?? {}) as HookConfig }
   catch { return {} }
 }
@@ -230,7 +230,7 @@ export async function runHooks(cfg: HookConfig, event: HookEvent, payload: unkno
 
 **Files:** Modify `packages/cli/src/index.ts`; Create `packages/cli/src/update.ts`; Test `test/update.test.ts`.
 
-- [ ] **update.ts:** `detectInstall()` returns `'brew' | 'npm' | 'unknown'` by checking whether the running path is under a Homebrew prefix (`/opt/homebrew` or `/usr/local/Cellar`); `updateCommand(install)` returns the shell command string (`brew upgrade maestro` vs `npm i -g maestro-cli@latest`). `runUpdate()` executes it via execa.
+- [ ] **update.ts:** `detectInstall()` returns `'brew' | 'npm' | 'unknown'` by checking whether the running path is under a Homebrew prefix (`/opt/homebrew` or `/usr/local/Cellar`); `updateCommand(install)` returns the shell command string (`brew upgrade podium` vs `npm i -g podium-cli@latest`). `runUpdate()` executes it via execa.
 
 ```ts
 import { execa } from 'execa'
@@ -241,8 +241,8 @@ export function detectInstall(execPath = process.argv[1] ?? ''): Install {
   return 'unknown'
 }
 export function updateCommand(install: Install): string {
-  if (install === 'brew') return 'brew upgrade maestro'
-  return 'npm install -g maestro-cli@latest'
+  if (install === 'brew') return 'brew upgrade podium'
+  return 'npm install -g podium-cli@latest'
 }
 export async function runUpdate(): Promise<void> {
   const cmd = updateCommand(detectInstall())
@@ -256,14 +256,14 @@ export async function runUpdate(): Promise<void> {
   - `--help` / `-h` → print usage and exit.
   - `update` → `await runUpdate()` and exit.
   - else → render the app.
-- [ ] **Failing test:** `detectInstall('/opt/homebrew/bin/maestro') === 'brew'`; `detectInstall('/usr/lib/node_modules/maestro-cli/bin/maestro.js') === 'npm'`; `updateCommand('brew')` contains `brew upgrade`; `updateCommand('npm')` contains `npm install -g`.
+- [ ] **Failing test:** `detectInstall('/opt/homebrew/bin/podium') === 'brew'`; `detectInstall('/usr/lib/node_modules/podium-cli/bin/podium.js') === 'npm'`; `updateCommand('brew')` contains `brew upgrade`; `updateCommand('npm')` contains `npm install -g`.
 - [ ] Run pass; commit `feat(cli): --version/--help and self-update (brew/npm aware)`.
 
 ---
 
 ## Task 6: Bundled build + Homebrew formula + release pipeline
 
-**Files:** Modify `packages/cli/package.json` (bundle config, files, publishConfig); Create `packages/cli/tsup.config.ts`, `Formula/maestro.rb`, `.github/workflows/release.yml`; Modify `README.md`.
+**Files:** Modify `packages/cli/package.json` (bundle config, files, publishConfig); Create `packages/cli/tsup.config.ts`, `Formula/podium.rb`, `.github/workflows/release.yml`; Modify `README.md`.
 
 - [ ] **tsup.config.ts (cli):** bundle workspace packages so the published artifact is self-contained.
 
@@ -272,21 +272,21 @@ import { defineConfig } from 'tsup'
 export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm'],
-  noExternal: [/^@maestro\//],   // inline workspace deps
+  noExternal: [/^@podium\//],   // inline workspace deps
   // ink/react/yaml/execa stay external (declared as dependencies)
   target: 'node20',
   clean: true,
 })
 ```
 
-- [ ] **cli/package.json:** set `"build": "tsup"`, add `"files": ["dist", "bin"]`, real `dependencies` (ink, react, yaml, execa) with concrete versions (no `workspace:*` left for runtime), `"publishConfig": { "access": "public" }`, `"version"` aligned to release tags. Remove `@maestro/*` from `dependencies` (now inlined) — keep them as `devDependencies` for the build.
-- [ ] **Formula/maestro.rb:**
+- [ ] **cli/package.json:** set `"build": "tsup"`, add `"files": ["dist", "bin"]`, real `dependencies` (ink, react, yaml, execa) with concrete versions (no `workspace:*` left for runtime), `"publishConfig": { "access": "public" }`, `"version"` aligned to release tags. Remove `@podium/*` from `dependencies` (now inlined) — keep them as `devDependencies` for the build.
+- [ ] **Formula/podium.rb:**
 
 ```ruby
-class Maestro < Formula
+class Podium < Formula
   desc "Local-model terminal coding agent optimized for small context windows"
-  homepage "https://github.com/jaredcassoutt/maestro"
-  url "https://registry.npmjs.org/maestro-cli/-/maestro-cli-VERSION.tgz"
+  homepage "https://github.com/jaredcassoutt/podium"
+  url "https://registry.npmjs.org/podium-cli/-/podium-cli-VERSION.tgz"
   sha256 "REPLACED_BY_CI"
   license "MIT"
   depends_on "node"
@@ -295,14 +295,14 @@ class Maestro < Formula
     bin.install_symlink Dir["#{libexec}/bin/*"]
   end
   test do
-    assert_match "maestro", shell_output("#{bin}/maestro --version")
+    assert_match "podium", shell_output("#{bin}/podium --version")
   end
 end
 ```
 
-- [ ] **.github/workflows/release.yml:** on `push` tags `v*` → checkout, setup Node, `pnpm install`, `pnpm -r build`, `pnpm --filter maestro-cli build`, `npm publish` (from `packages/cli`, using `NODE_AUTH_TOKEN`), then compute the tarball sha256 and open a PR/commit bumping `Formula/maestro.rb` `url`+`sha256`.
-- [ ] **README.md:** install via `npm install -g maestro-cli` or `brew install jaredcassoutt/tap/maestro`; `maestro update` to upgrade.
-- [ ] **Verify:** `pnpm --filter maestro-cli build` produces a `dist/index.js` with no `@maestro/*` imports (grep it); `node packages/cli/bin/maestro.js --version` prints the version.
+- [ ] **.github/workflows/release.yml:** on `push` tags `v*` → checkout, setup Node, `pnpm install`, `pnpm -r build`, `pnpm --filter podium-cli build`, `npm publish` (from `packages/cli`, using `NODE_AUTH_TOKEN`), then compute the tarball sha256 and open a PR/commit bumping `Formula/podium.rb` `url`+`sha256`.
+- [ ] **README.md:** install via `npm install -g podium-cli` or `brew install jaredcassoutt/tap/podium`; `podium update` to upgrade.
+- [ ] **Verify:** `pnpm --filter podium-cli build` produces a `dist/index.js` with no `@podium/*` imports (grep it); `node packages/cli/bin/podium.js --version` prints the version.
 - [ ] Commit `feat(dist): bundled npm build, Homebrew formula, GitHub Actions release`.
 
 ---
@@ -311,5 +311,5 @@ end
 
 - **Spec coverage:** LM Studio + MLX (T1–T2), backend factory/detection (T2), 8GB tier (T3), hooks subset (T4), npm + brew + auto-update + CI (T5–T6).
 - **Type consistency:** both adapters implement `Provider` via `OpenAICompatProvider`; `BackendId` aligns with `Provider.id` union. `RunTurnOpts` gains `preToolUse` mirroring `onPermissionAsk`.
-- **Risks:** SSE tool-call accumulation is the trickiest bit (Task 1 test covers it); LM Studio `pull` needs the `lms` CLI (documented; errors clearly otherwise); bundling must drop all `workspace:*` runtime deps (Task 6 verify step greps for `@maestro/`).
+- **Risks:** SSE tool-call accumulation is the trickiest bit (Task 1 test covers it); LM Studio `pull` needs the `lms` CLI (documented; errors clearly otherwise); bundling must drop all `workspace:*` runtime deps (Task 6 verify step greps for `@podium/`).
 - **Placeholders:** none (CI sha256 is intentionally CI-substituted).

@@ -1,5 +1,5 @@
-import type { Provider, ChatMessage, ToolCall } from '@maestro/providers'
-import type { Tool, TodoStore, ToolContextSkills } from '@maestro/tools'
+import type { Provider, ChatMessage, ToolCall } from '@podium/providers'
+import type { Tool, TodoStore, ToolContextSkills } from '@podium/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
 import { extractToolCalls } from './tool-parse.js'

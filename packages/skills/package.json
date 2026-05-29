@@ -1,5 +1,5 @@
 {
-  "name": "@maestro/skills",
+  "name": "@podium/skills",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",

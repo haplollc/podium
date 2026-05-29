@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Text } from 'ink'
-import type { ContextStats } from '@maestro/core'
+import type { ContextStats } from '@podium/core'
 
 function k(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)

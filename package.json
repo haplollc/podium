@@ -1,5 +1,5 @@
 {
-  "name": "maestro-monorepo",
+  "name": "podium-monorepo",
   "private": true,
   "type": "module",
   "engines": { "node": ">=20" },

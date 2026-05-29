@@ -1,12 +1,12 @@
 {
-  "name": "maestro-cli",
+  "name": "podium-cli",
   "version": "0.1.0",
   "description": "A local-model terminal coding agent, optimized for small context windows and modest Macs.",
   "license": "MIT",
-  "homepage": "https://github.com/haplollc/maestro",
-  "repository": { "type": "git", "url": "git+https://github.com/haplollc/maestro.git" },
+  "homepage": "https://github.com/haplollc/podium",
+  "repository": { "type": "git", "url": "git+https://github.com/haplollc/podium.git" },
   "type": "module",
-  "bin": { "maestro": "./bin/maestro.js" },
+  "bin": { "podium": "./bin/podium.js" },
   "main": "./dist/index.js",
   "files": ["dist", "bin"],
   "engines": { "node": ">=20" },
@@ -19,11 +19,11 @@
     "yaml": "^2.6.0"
   },
   "devDependencies": {
-    "@maestro/core": "workspace:*",
-    "@maestro/providers": "workspace:*",
-    "@maestro/hardware": "workspace:*",
-    "@maestro/tools": "workspace:*",
-    "@maestro/tui": "workspace:*",
-    "@maestro/skills": "workspace:*"
+    "@podium/core": "workspace:*",
+    "@podium/providers": "workspace:*",
+    "@podium/hardware": "workspace:*",
+    "@podium/tools": "workspace:*",
+    "@podium/tui": "workspace:*",
+    "@podium/skills": "workspace:*"
   }
 }

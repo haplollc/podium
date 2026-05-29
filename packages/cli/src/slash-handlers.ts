@@ -1,5 +1,5 @@
-import type { ContextStats } from '@maestro/core'
-import type { SlashCommand } from '@maestro/core'
+import type { ContextStats } from '@podium/core'
+import type { SlashCommand } from '@podium/core'
 
 export interface SlashCtx {
   stats(): ContextStats
@@ -50,7 +50,7 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
     case 'plan':
       return `Plan mode ${ctx.togglePlan() ? 'ON — read-only until you /plan again' : 'OFF'}.`
     case 'soul':
-      return `Maestro's soul (create SOUL.md to customize):\n${ctx.soul()}`
+      return `Podium's soul (create SOUL.md to customize):\n${ctx.soul()}`
     default:
       if (ctx.hasSkill(cmd.name)) return ctx.runSkill(cmd.name, cmd.args)
       return `Unknown command: /${cmd.name}. Try /help`

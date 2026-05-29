@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@maestro/providers'
+import type { ChatMessage } from '@podium/providers'
 
 const CHARS_PER_TOKEN = 4
 const PER_MESSAGE_OVERHEAD = 4

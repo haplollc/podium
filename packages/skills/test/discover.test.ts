@@ -6,7 +6,7 @@ import { discoverSkills } from '../src/discover.js'
 import { SkillRegistry, buildSkillListing } from '../src/registry.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-skills-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-skills-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 async function writeSkill(root: string, name: string, desc: string, body: string) {
@@ -28,7 +28,7 @@ describe('discoverSkills + registry', () => {
   })
 
   it('earlier roots win on name collision', async () => {
-    const dir2 = await mkdtemp(path.join(tmpdir(), 'maestro-skills2-'))
+    const dir2 = await mkdtemp(path.join(tmpdir(), 'podium-skills2-'))
     await writeSkill(dir, 'dup', 'from-first', 'first')
     await writeSkill(dir2, 'dup', 'from-second', 'second')
     const metas = await discoverSkills([dir, dir2])

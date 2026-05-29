@@ -4,14 +4,14 @@ import { resolveCommand } from '../src/cli-args.js'
 
 describe('detectInstall', () => {
   it('detects a Homebrew install', () => {
-    expect(detectInstall('/opt/homebrew/bin/maestro')).toBe('brew')
-    expect(detectInstall('/usr/local/Cellar/maestro/0.1.0/bin/maestro')).toBe('brew')
+    expect(detectInstall('/opt/homebrew/bin/podium')).toBe('brew')
+    expect(detectInstall('/usr/local/Cellar/podium/0.1.0/bin/podium')).toBe('brew')
   })
   it('detects an npm global install', () => {
-    expect(detectInstall('/usr/lib/node_modules/maestro-cli/bin/maestro.js')).toBe('npm')
+    expect(detectInstall('/usr/lib/node_modules/podium-cli/bin/podium.js')).toBe('npm')
   })
   it('falls back to unknown', () => {
-    expect(detectInstall('/Users/me/dev/maestro/packages/cli/bin/maestro.js')).toBe('unknown')
+    expect(detectInstall('/Users/me/dev/podium/packages/cli/bin/podium.js')).toBe('unknown')
   })
 })
 

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Text, useInput } from 'ink'
-import type { ToolCall } from '@maestro/providers'
+import type { ToolCall } from '@podium/providers'
 
 export function PermissionPrompt(
   { call, onDecision }: { call: ToolCall; onDecision: (ok: boolean) => void },

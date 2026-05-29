@@ -5,11 +5,11 @@ const KNOWN = ['Write', 'Read', 'Bash']
 
 describe('extractToolCalls', () => {
   it('parses a bare JSON tool call', () => {
-    const text = '{"name":"Write","arguments":{"file_path":"hello.txt","content":"maestro"}}'
+    const text = '{"name":"Write","arguments":{"file_path":"hello.txt","content":"podium"}}'
     const { calls, cleanedText } = extractToolCalls(text, KNOWN)
     expect(calls).toHaveLength(1)
     expect(calls[0].name).toBe('Write')
-    expect(calls[0].arguments).toEqual({ file_path: 'hello.txt', content: 'maestro' })
+    expect(calls[0].arguments).toEqual({ file_path: 'hello.txt', content: 'podium' })
     expect(cleanedText).toBe('')
   })
 
@@ -35,7 +35,7 @@ describe('extractToolCalls', () => {
   })
 
   it('returns no calls for ordinary prose', () => {
-    const text = 'The file already contains the word maestro, so we are done.'
+    const text = 'The file already contains the word podium, so we are done.'
     const r = extractToolCalls(text, KNOWN)
     expect(r.calls).toHaveLength(0)
     expect(r.cleanedText).toBe(text)

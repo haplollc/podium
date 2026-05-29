@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react'
 import os from 'node:os'
 import { Box, Text } from 'ink'
-import { computeSystemInfo, type SystemInfo } from '@maestro/hardware'
-import { OllamaProvider, loadCatalog } from '@maestro/providers'
-import type { HealthStatus, CatalogModel, ToolCall } from '@maestro/providers'
+import { computeSystemInfo, type SystemInfo } from '@podium/hardware'
+import { OllamaProvider, loadCatalog } from '@podium/providers'
+import type { HealthStatus, CatalogModel, ToolCall } from '@podium/providers'
 import {
   ContextManager, buildSystemPrompt, runTurn, compact, parseSlash,
   type ContextStats, type PermissionMode,
-} from '@maestro/core'
-import { allTools, baseTools, type TodoItem, type TodoStore } from '@maestro/tools'
-import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing, mergeSkills, builtinSkills } from '@maestro/skills'
-import { SetupWizard, Repl, PermissionPrompt, Banner, type TranscriptEntry } from '@maestro/tui'
-import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
+} from '@podium/core'
+import { allTools, baseTools, type TodoItem, type TodoStore } from '@podium/tools'
+import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing, mergeSkills, builtinSkills } from '@podium/skills'
+import { SetupWizard, Repl, PermissionPrompt, Banner, type TranscriptEntry } from '@podium/tui'
+import { loadConfig, saveConfig, type PodiumConfig } from './config.js'
 import { loadMemory } from './memory.js'
 import { loadSoul, DEFAULT_SOUL } from './soul.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
@@ -21,7 +21,7 @@ const THINKING_VERBS = ['Thinking…', 'Pondering…', 'Cooking…', 'Noodling�
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
-export function decideStartScreen(cfg: MaestroConfig | null, health: HealthStatus): StartScreen {
+export function decideStartScreen(cfg: PodiumConfig | null, health: HealthStatus): StartScreen {
   if (!health.running) return 'backend-error'
   if (!cfg) return 'setup'
   return 'repl'
@@ -35,7 +35,7 @@ export function App(): React.ReactElement {
   const [sys, setSys] = useState<SystemInfo | null>(null)
   const [catalog, setCatalog] = useState<CatalogModel[]>([])
   const [installed, setInstalled] = useState<Set<string>>(new Set())
-  const [cfg, setCfg] = useState<MaestroConfig | null>(null)
+  const [cfg, setCfg] = useState<PodiumConfig | null>(null)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [stats, setStats] = useState<ContextStats>({ used: 0, effective: 0, window: 0, percentUsed: 0 })
   const [busy, setBusy] = useState(false)
@@ -83,7 +83,7 @@ export function App(): React.ReactElement {
     })()
   }, [])
 
-  function initRepl(config: MaestroConfig) {
+  function initRepl(config: PodiumConfig) {
     const mgr = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
     cmRef.current = mgr
     setStats(mgr.stats())
@@ -108,7 +108,7 @@ export function App(): React.ReactElement {
   }
 
   async function onWizardComplete(r: { model: string; contextSize: number }) {
-    const next: MaestroConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize, mode: 'default' }
+    const next: PodiumConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize, mode: 'default' }
     await saveConfig(next)
     setCfg(next); initRepl(next); setScreen('repl')
     void warmModel(next.model)
@@ -241,14 +241,14 @@ export function App(): React.ReactElement {
     await runAgentTurn(text, true)
   }
 
-  if (screen === 'loading' || !sys) return <Text>Starting Maestro…</Text>
+  if (screen === 'loading' || !sys) return <Text>Starting Podium…</Text>
   if (screen === 'backend-error')
     return (
       <Box flexDirection="column">
         <Text color="red">No local-model backend detected (Ollama).</Text>
         <Text>Install:  brew install ollama</Text>
         <Text>Start:    ollama serve</Text>
-        <Text dimColor>Then relaunch maestro.</Text>
+        <Text dimColor>Then relaunch podium.</Text>
       </Box>
     )
   if (screen === 'setup')

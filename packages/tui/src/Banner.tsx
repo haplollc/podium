@@ -11,7 +11,7 @@ export function Banner({ model, cwd }: { model: string; cwd: string }): React.Re
   return (
     <Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column" marginBottom={1}>
       <Text>
-        <Text color="magenta" bold>✦ Maestro</Text>
+        <Text color="magenta" bold>✦ Podium</Text>
         <Text dimColor>  ·  local-model coding agent</Text>
       </Text>
       <Text dimColor>{model}  ·  {tilde(cwd)}</Text>

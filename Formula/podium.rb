@@ -1,7 +1,7 @@
-class Maestro < Formula
+class Podium < Formula
   desc "Local-model terminal coding agent optimized for small context windows"
-  homepage "https://github.com/haplollc/maestro"
-  url "https://registry.npmjs.org/maestro-cli/-/maestro-cli-0.1.0.tgz"
+  homepage "https://github.com/haplollc/podium"
+  url "https://registry.npmjs.org/podium-cli/-/podium-cli-0.1.0.tgz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000" # bumped by CI on release
   license "MIT"
 
@@ -13,6 +13,6 @@ class Maestro < Formula
   end
 
   test do
-    assert_match "maestro", shell_output("#{bin}/maestro --help")
+    assert_match "podium", shell_output("#{bin}/podium --help")
   end
 end

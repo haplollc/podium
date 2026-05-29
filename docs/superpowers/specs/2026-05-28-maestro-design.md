@@ -1,17 +1,17 @@
-# Maestro — Design Spec
+# Podium — Design Spec
 
 **Date:** 2026-05-28
 **Status:** Approved (design phase)
 
 ## 1. Summary
 
-Maestro is a terminal coding agent with Claude Code's feature set — agentic loop,
+Podium is a terminal coding agent with Claude Code's feature set — agentic loop,
 tools, skills, plan mode, subagents, slash commands, auto-compaction — running
 **100% on local models**. It is optimized for **small context windows** and **modest
 Macs**, with a hard floor of **16 GB** unified memory and an experimental/limited
 tier for **8 GB** machines.
 
-Invoked as `maestro`. Installable via **npm** and **Homebrew**, with consistent
+Invoked as `podium`. Installable via **npm** and **Homebrew**, with consistent
 self-update.
 
 ## 2. Guiding principles
@@ -33,7 +33,7 @@ self-update.
 Monorepo using pnpm workspaces. TypeScript/Node throughout.
 
 ```
-maestro/
+podium/
   packages/
     core/        agentic loop, context manager, compaction, token budgeter
     providers/   backend abstraction: ollama | lmstudio | mlx adapters
@@ -41,7 +41,7 @@ maestro/
     skills/      SKILL.md loader + progressive disclosure
     tui/         Ink/React terminal UI (REPL, wizard, model picker, context meter)
     hardware/    Mac memory detection + model-fit calculator
-    cli/         entrypoint `maestro`, slash-command dispatch, config/memory
+    cli/         entrypoint `podium`, slash-command dispatch, config/memory
   models/        curated catalog (model -> sizes/quant -> RAM tiers -> capabilities)
 ```
 
@@ -74,7 +74,7 @@ interface Provider {
   `http://localhost:8080/v1`; downloads pull from HuggingFace `mlx-community`.
   Fastest path on Apple Silicon.
 
-On launch Maestro auto-detects which backends are installed and running. If none,
+On launch Podium auto-detects which backends are installed and running. If none,
 the setup wizard guides installing one (recommends Ollama via `brew install ollama`).
 
 ## 5. Model management & hardware fitting
@@ -106,7 +106,7 @@ Runs whenever no model is configured. Forced but friendly:
 3. If the chosen model isn't downloaded → `pull` it with a live progress bar.
    If already downloaded → select it.
 4. Pick a default context size (auto-suggested from the fit math).
-5. Drop into the REPL. Config persisted to `~/.maestro/config.json`.
+5. Drop into the REPL. Config persisted to `~/.podium/config.json`.
 
 ## 7. Agentic loop + tool-calling strategy
 
@@ -117,7 +117,7 @@ Runs whenever no model is configured. Forced but friendly:
 - **Dual-path tool invocation:**
   - *Native* function-calling when `capabilities` includes `tools`.
   - *Fallback* constrained text protocol when it does not: the model emits a fenced
-    tool block (JSON), parsed by Maestro, with Ollama `format` / llama.cpp grammar used
+    tool block (JSON), parsed by Podium, with Ollama `format` / llama.cpp grammar used
     to force valid structure where supported, plus an **auto-repair reprompt** on
     malformed output (bounded retries, then surface the error).
 - **System prompt is intentionally minimal** (target <1k tokens). Everything else is
@@ -143,15 +143,15 @@ Runs whenever no model is configured. Forced but friendly:
 - **Strategy:** retained-prefix + summarize-the-tail (incremental). The summary is
   structured: task / current state / files+snippets / decisions / next steps.
   Tool-result payloads are dropped/truncated first (largest, least valuable).
-- **State externalization:** plan and todos live in files under `.maestro/`, not in
+- **State externalization:** plan and todos live in files under `.podium/`, not in
   context. Subagents offload exploration so their churn never reaches the main window.
-- Honors a `## Compact Instructions` block in `CLAUDE.md` / `MAESTRO.md`.
+- Honors a `## Compact Instructions` block in `CLAUDE.md` / `PODIUM.md`.
 
 ## 10. Skills (Claude Code-compatible)
 
 - Same `SKILL.md` format: YAML frontmatter (`name`, `description`, `allowed-tools`,
   `user-invocable`, `argument-hint`, `when_to_use`, …) + markdown body.
-- Discovered from `~/.maestro/skills`, `<project>/.maestro/skills`, and (for
+- Discovered from `~/.podium/skills`, `<project>/.podium/skills`, and (for
   compatibility) `~/.claude/skills`.
 - **Progressive disclosure:** only `name` + `description` injected at startup via a
   system-reminder; the full body is loaded only on invocation. Essential for small
@@ -171,7 +171,7 @@ Custom commands are skill files with `$ARGUMENTS` / `$1` interpolation.
 
 The `Task` tool launches an **isolated-context** subagent (fresh context, returns one
 concise report) — doubly valuable here because it keeps exploration out of the small
-main window. Custom agents defined in `.maestro/agents/*.md`. A `fork` variant inherits
+main window. Custom agents defined in `.podium/agents/*.md`. A `fork` variant inherits
 the parent context when needed.
 
 ## 13. Plan mode & thinking
@@ -184,19 +184,19 @@ the parent context when needed.
 
 ## 14. Config & memory
 
-- `~/.maestro/config.json` — backend, model, context size, permission defaults.
+- `~/.podium/config.json` — backend, model, context size, permission defaults.
 - Layered `settings.json` (user → project) for permissions/env/hooks.
-- Hierarchical memory: `MAESTRO.md` / `CLAUDE.md` (user → project), loaded into the
+- Hierarchical memory: `PODIUM.md` / `CLAUDE.md` (user → project), loaded into the
   prompt tail.
 - **Hooks (v1 subset):** `SessionStart`, `PreToolUse`, `PreCompact`,
   `UserPromptSubmit`. Not the full Claude Code lifecycle in v1.
 
 ## 15. Distribution & updates
 
-- **npm:** `npm install -g maestro-cli` (Node entrypoint).
-- **Homebrew:** a tap — `brew install jaredcassoutt/tap/maestro` — wrapping the npm
+- **npm:** `npm install -g podium-cli` (Node entrypoint).
+- **Homebrew:** a tap — `brew install jaredcassoutt/tap/podium` — wrapping the npm
   package; the formula is auto-bumped from the repo on release.
-- **Updates:** `maestro update` self-updates (detects npm vs brew install). A startup
+- **Updates:** `podium update` self-updates (detects npm vs brew install). A startup
   version check notifies when a newer release is available.
 - **Release pipeline:** GitHub Actions — tag → publish to npm → bump brew formula.
 
@@ -209,7 +209,7 @@ the parent context when needed.
 - **Phase 2 — Robustness:** parsed-tool fallback + auto-repair, TodoWrite, permission
   modes, `/model` `/context` `/compact` commands, config persistence.
 - **Phase 3 — Power features:** Skills (CC-compatible), subagents (`Task`), plan mode,
-  `CLAUDE.md`/`MAESTRO.md` memory.
+  `CLAUDE.md`/`PODIUM.md` memory.
 - **Phase 4 — Reach:** LM Studio + MLX adapters, 8 GB tiny-model tier, hooks subset,
   npm + Homebrew distribution + auto-update.
 

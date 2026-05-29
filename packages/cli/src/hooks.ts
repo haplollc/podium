@@ -7,8 +7,8 @@ export type HookEvent = 'SessionStart' | 'UserPromptSubmit' | 'PreToolUse' | 'Pr
 interface HookCmd { command: string }
 export type HookConfig = Partial<Record<HookEvent, HookCmd[]>>
 
-/** Load command-hooks from ~/.maestro/settings.json ({ "hooks": { "<Event>": [{ "command": "..." }] } }). */
-export async function loadHooks(dir = path.join(os.homedir(), '.maestro')): Promise<HookConfig> {
+/** Load command-hooks from ~/.podium/settings.json ({ "hooks": { "<Event>": [{ "command": "..." }] } }). */
+export async function loadHooks(dir = path.join(os.homedir(), '.podium')): Promise<HookConfig> {
   try {
     const json = JSON.parse(await readFile(path.join(dir, 'settings.json'), 'utf8'))
     return (json.hooks ?? {}) as HookConfig

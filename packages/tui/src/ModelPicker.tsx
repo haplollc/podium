@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import type { FitVerdict } from '@maestro/hardware'
+import type { FitVerdict } from '@podium/hardware'
 
 export interface ModelRow {
   id: string

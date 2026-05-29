@@ -1,8 +1,8 @@
-# Maestro Phase 2 (Robustness & Control) Implementation Plan
+# Podium Phase 2 (Robustness & Control) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or superpowers:executing-plans. Steps use `- [ ]` checkboxes.
 
-**Goal:** Make Maestro safe and controllable: slash commands (`/model`, `/models`, `/pull`, `/context`, `/compact`, `/clear`, `/help`), permission modes gating mutating tools, a TodoWrite tool, and tool-call auto-repair.
+**Goal:** Make Podium safe and controllable: slash commands (`/model`, `/models`, `/pull`, `/context`, `/compact`, `/clear`, `/help`), permission modes gating mutating tools, a TodoWrite tool, and tool-call auto-repair.
 
 **Architecture:** New pure, testable modules in `core` (`slash`, `permission`, repair logic in `loop`) and a `TodoWrite` tool in `tools`. The `cli` app wires slash dispatch + a permission-prompt UI. Phase 1's `Provider`/`Tool`/`ContextManager` interfaces are unchanged except `ToolContext` gains an optional todo store and `RunTurnOpts` gains a permission hook.
 
@@ -180,7 +180,7 @@ export const todoTool: Tool = {
 - [ ] **Step 3: Implement** `slash-handlers.ts`
 
 ```ts
-import type { ContextStats } from '@maestro/core'
+import type { ContextStats } from '@podium/core'
 export interface SlashCtx {
   stats(): ContextStats
   clear(): void

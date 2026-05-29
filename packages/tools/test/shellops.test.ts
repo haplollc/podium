@@ -8,7 +8,7 @@ import { globTool } from '../src/glob.js'
 import { allTools, toolByName } from '../src/index.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('shell tools', () => {

@@ -1,20 +1,20 @@
-# Maestro Phase 3 (Power Features) Implementation Plan
+# Podium Phase 3 (Power Features) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or superpowers:executing-plans. Steps use `- [ ]` checkboxes.
 
-**Goal:** Add Claude Code-compatible **Skills** (SKILL.md + progressive disclosure), **subagents** (Task tool with isolated context), **plan mode**, and **hierarchical memory** (MAESTRO.md / CLAUDE.md).
+**Goal:** Add Claude Code-compatible **Skills** (SKILL.md + progressive disclosure), **subagents** (Task tool with isolated context), **plan mode**, and **hierarchical memory** (PODIUM.md / CLAUDE.md).
 
-**Architecture:** New `@maestro/skills` package (parse + discover + registry + progressive-disclosure listing). Memory loader + skill/task/plan tools. `ToolContext` gains `skills`, `spawnAgent`, `exitPlan`. The agentic loop stays the same; `cli` wires a skill registry, a subagent spawner (fresh `ContextManager` + base tools, returns one report), plan-mode toggle, and `/skills` / `/skill-name` / `/plan` slash commands. `buildSystemPrompt` gains optional `memory`, `skillListing`, and `planMode` sections.
+**Architecture:** New `@podium/skills` package (parse + discover + registry + progressive-disclosure listing). Memory loader + skill/task/plan tools. `ToolContext` gains `skills`, `spawnAgent`, `exitPlan`. The agentic loop stays the same; `cli` wires a skill registry, a subagent spawner (fresh `ContextManager` + base tools, returns one report), plan-mode toggle, and `/skills` / `/skill-name` / `/plan` slash commands. `buildSystemPrompt` gains optional `memory`, `skillListing`, and `planMode` sections.
 
 **Tech Stack:** Phase 1/2 stack + `yaml` (frontmatter parsing).
 
 ---
 
-## Task 1: `@maestro/skills` — parse SKILL.md
+## Task 1: `@podium/skills` — parse SKILL.md
 
 **Files:** Create `packages/skills/package.json`, `tsconfig.json`, `src/parse.ts`, `src/types.ts`, `src/index.ts`; Test `test/parse.test.ts`.
 
-- [ ] **package.json** depends on `yaml` and `@maestro/tools` (for the SkillRegistry type contract is in tools; skills imports nothing from tools — keep one-way). Actually skills has NO maestro deps; `yaml` only.
+- [ ] **package.json** depends on `yaml` and `@podium/tools` (for the SkillRegistry type contract is in tools; skills imports nothing from tools — keep one-way). Actually skills has NO podium deps; `yaml` only.
 - [ ] **types.ts:**
 
 ```ts
@@ -68,7 +68,7 @@ export function interpolateArgs(body: string, args: string): string {
 
 ---
 
-## Task 2: `@maestro/skills` — discovery + registry
+## Task 2: `@podium/skills` — discovery + registry
 
 **Files:** Create `src/discover.ts`, `src/registry.ts`; Modify index; Test `test/discover.test.ts`.
 
@@ -100,8 +100,8 @@ export async function discoverSkills(roots: string[]): Promise<SkillMeta[]> {
 
 export function defaultSkillRoots(home: string, cwd: string): string[] {
   return [
-    path.join(cwd, '.maestro', 'skills'),
-    path.join(home, '.maestro', 'skills'),
+    path.join(cwd, '.podium', 'skills'),
+    path.join(home, '.podium', 'skills'),
     path.join(home, '.claude', 'skills'), // Claude Code compatibility
   ]
 }
@@ -181,7 +181,7 @@ export interface ToolContext {
 
 **Files:** Create `packages/cli/src/memory.ts`; Test `test/memory.test.ts`; Modify `packages/cli/src/app.tsx`, `packages/cli/src/slash-handlers.ts` and its test.
 
-- [ ] **memory.ts:** `loadMemory(cwd, home)` reads, in order, `~/.maestro/MAESTRO.md`, `~/CLAUDE.md`, `<cwd>/MAESTRO.md`, `<cwd>/CLAUDE.md`; returns the concatenation (missing files skipped). Test: round-trip with a temp dir.
+- [ ] **memory.ts:** `loadMemory(cwd, home)` reads, in order, `~/.podium/PODIUM.md`, `~/CLAUDE.md`, `<cwd>/PODIUM.md`, `<cwd>/CLAUDE.md`; returns the concatenation (missing files skipped). Test: round-trip with a temp dir.
 - [ ] **slash-handlers.ts:** add to `SlashCtx`: `listSkills(): string[]`, `runSkill(name: string, args: string): Promise<string>`, `togglePlan(): boolean`. Add cases:
   - `skills` → `Skills: ${ctx.listSkills().join(', ') || '(none)'}`
   - `plan` → `Plan mode ${ctx.togglePlan() ? 'ON' : 'OFF'}.`
@@ -194,7 +194,7 @@ export interface ToolContext {
   - Plan toggle: a `planMode` state; when on, pass `mode:'plan'`. `exitPlan(plan)`: push the plan to the transcript and set `planMode=false`.
   - Slash: `/skills`, `/plan`, and `/<skillname>` (dispatch to the registry, inject the body as a user message then run a turn).
 - [ ] **loop.ts:** add `skills?`, `spawnAgent?`, `exitPlan?`, `planMode?` to `RunTurnOpts`; pass them into the `ToolContext` built for `tool.run`; when `planMode` is set, force `mode='plan'`.
-- [ ] **Manual smoke:** create `.maestro/skills/hello/SKILL.md`; run maestro; `/skills` lists it; `/hello` injects its body; `/plan` toggles; a Task call spawns a subagent.
+- [ ] **Manual smoke:** create `.podium/skills/hello/SKILL.md`; run podium; `/skills` lists it; `/hello` injects its body; `/plan` toggles; a Task call spawns a subagent.
 - [ ] Run all tests + build; commit `feat(cli): memory, skill registry, subagent spawner, plan mode wiring`.
 
 ---

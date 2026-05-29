@@ -1,6 +1,6 @@
 export type CliCommand = 'version' | 'help' | 'update' | 'run'
 
-/** Resolve the top-level command from argv (everything after `node maestro`). */
+/** Resolve the top-level command from argv (everything after `node podium`). */
 export function resolveCommand(argv: string[]): CliCommand {
   const first = argv[0]
   if (first === '--version' || first === '-v') return 'version'
@@ -9,13 +9,13 @@ export function resolveCommand(argv: string[]): CliCommand {
   return 'run'
 }
 
-export const HELP_TEXT = `maestro — local-model terminal coding agent
+export const HELP_TEXT = `podium — local-model terminal coding agent
 
 Usage:
-  maestro              Start the interactive agent (setup wizard on first run)
-  maestro update       Update to the latest version (Homebrew or npm)
-  maestro --version    Print the version
-  maestro --help       Show this help
+  podium              Start the interactive agent (setup wizard on first run)
+  podium update       Update to the latest version (Homebrew or npm)
+  podium --version    Print the version
+  podium --help       Show this help
 
 In-session slash commands:
   /model /models /pull <name> /skills /plan /context /compact /clear /help`

@@ -1,4 +1,4 @@
-import type { ToolCall } from '@maestro/providers'
+import type { ToolCall } from '@podium/providers'
 
 export interface ParsedTools {
   calls: ToolCall[]

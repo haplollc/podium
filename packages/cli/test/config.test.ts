@@ -5,7 +5,7 @@ import path from 'node:path'
 import { loadConfig, saveConfig } from '../src/config.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-cfg-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-cfg-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('config', () => {

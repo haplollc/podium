@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildModelRows } from '../src/SetupWizard.js'
-import type { CatalogModel } from '@maestro/providers'
-import type { SystemInfo } from '@maestro/hardware'
+import type { CatalogModel } from '@podium/providers'
+import type { SystemInfo } from '@podium/hardware'
 
 const sys: SystemInfo = {
   totalMemoryBytes: 16 * 1024 ** 3, totalMemoryGB: 16, usableMemoryGB: 11.2,

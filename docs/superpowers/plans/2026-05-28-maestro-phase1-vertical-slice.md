@@ -1,4 +1,4 @@
-# Maestro Phase 1 (Vertical Slice) Implementation Plan
+# Podium Phase 1 (Vertical Slice) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 ```
-maestro/
+podium/
   package.json                      # root, pnpm workspace + scripts
   pnpm-workspace.yaml
   tsconfig.base.json
@@ -62,10 +62,10 @@ maestro/
       src/index.ts
       test/ContextMeter.test.tsx
     cli/
-      src/index.ts                  # `maestro` entrypoint
-      src/config.ts                 # ~/.maestro/config.json load/save
+      src/index.ts                  # `podium` entrypoint
+      src/config.ts                 # ~/.podium/config.json load/save
       src/app.tsx                   # top-level Ink app (wizard-or-repl)
-      bin/maestro.js                # shebang launcher
+      bin/podium.js                # shebang launcher
       test/config.test.ts
 ```
 
@@ -99,7 +99,7 @@ packages:
 
 ```json
 {
-  "name": "maestro-monorepo",
+  "name": "podium-monorepo",
   "private": true,
   "type": "module",
   "engines": { "node": ">=20" },
@@ -174,7 +174,7 @@ git commit -m "chore: scaffold pnpm/TypeScript monorepo with Vitest"
 
 ```json
 {
-  "name": "@maestro/hardware",
+  "name": "@podium/hardware",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -436,14 +436,14 @@ git commit -m "feat(hardware): model-fit calculator with fits/tight/wont-run ver
 
 ```json
 {
-  "name": "@maestro/providers",
+  "name": "@podium/providers",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
   "scripts": { "build": "tsup src/index.ts --format esm --dts" },
-  "dependencies": { "@maestro/hardware": "workspace:*" }
+  "dependencies": { "@podium/hardware": "workspace:*" }
 }
 ```
 
@@ -789,14 +789,14 @@ git commit -m "feat(providers): Provider interface + Ollama adapter (health/list
 
 ```json
 {
-  "name": "@maestro/core",
+  "name": "@podium/core",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
   "scripts": { "build": "tsup src/index.ts --format esm --dts" },
-  "dependencies": { "@maestro/providers": "workspace:*" }
+  "dependencies": { "@podium/providers": "workspace:*" }
 }
 ```
 
@@ -831,7 +831,7 @@ Expected: FAIL — cannot find module `../src/tokens.js`.
 - [ ] **Step 5: Implement `packages/core/src/tokens.ts`**
 
 ```ts
-import type { ChatMessage } from '@maestro/providers'
+import type { ChatMessage } from '@podium/providers'
 
 const CHARS_PER_TOKEN = 4
 const PER_MESSAGE_OVERHEAD = 4
@@ -927,7 +927,7 @@ Expected: FAIL — cannot find module `../src/context.js`.
 - [ ] **Step 4: Implement `packages/core/src/context.ts`**
 
 ```ts
-import type { ChatMessage } from '@maestro/providers'
+import type { ChatMessage } from '@podium/providers'
 import { estimateMessageTokens } from './tokens.js'
 import type { ContextStats } from './types.js'
 
@@ -1030,7 +1030,7 @@ Expected: FAIL — cannot find module `../src/compaction.js`.
 - [ ] **Step 3: Implement `packages/core/src/compaction.ts`**
 
 ```ts
-import type { ChatMessage } from '@maestro/providers'
+import type { ChatMessage } from '@podium/providers'
 import type { ContextStats } from './types.js'
 import type { ContextManager } from './context.js'
 
@@ -1129,7 +1129,7 @@ export interface SystemPromptCtx {
 
 export function buildSystemPrompt(ctx: SystemPromptCtx): string {
   return [
-    `You are Maestro, a terminal coding agent running on a local model.`,
+    `You are Podium, a terminal coding agent running on a local model.`,
     `Help with software tasks. Be concise; prefer doing over explaining.`,
     `Use the provided tools to read and change files and run commands. Prefer dedicated tools (Read/Edit/Grep/Glob) over shell equivalents (cat/sed/grep/find).`,
     `You MUST Read a file before you Write or Edit it. Make the smallest change that satisfies the request.`,
@@ -1173,14 +1173,14 @@ git commit -m "feat(core): minimal (<1k token) system prompt assembly"
 
 ```json
 {
-  "name": "@maestro/tools",
+  "name": "@podium/tools",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
   "scripts": { "build": "tsup src/index.ts --format esm --dts" },
-  "dependencies": { "execa": "^9.4.0", "@maestro/providers": "workspace:*" }
+  "dependencies": { "execa": "^9.4.0", "@podium/providers": "workspace:*" }
 }
 ```
 
@@ -1193,7 +1193,7 @@ git commit -m "feat(core): minimal (<1k token) system prompt assembly"
 - [ ] **Step 3: Create `packages/tools/src/types.ts`**
 
 ```ts
-import type { ToolSchema } from '@maestro/providers'
+import type { ToolSchema } from '@podium/providers'
 
 export interface ToolContext { cwd: string }
 
@@ -1280,7 +1280,7 @@ import { writeTool } from '../src/write.js'
 import { editTool } from '../src/edit.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('file tools', () => {
@@ -1457,7 +1457,7 @@ import { globTool } from '../src/glob.js'
 import { allTools } from '../src/index.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('shell tools', () => {
@@ -1632,13 +1632,13 @@ git commit -m "feat(tools): Bash, Grep, Glob + tool registry (allTools/toolByNam
 
 **Files:**
 - Create: `packages/core/src/loop.ts`
-- Modify: `packages/core/src/index.ts`, `packages/core/package.json` (add `@maestro/tools` dep)
+- Modify: `packages/core/src/index.ts`, `packages/core/package.json` (add `@podium/tools` dep)
 - Test: `packages/core/test/loop.test.ts` (extend the file from Task 8)
 
-- [ ] **Step 1: Add `@maestro/tools` to `packages/core/package.json` dependencies**
+- [ ] **Step 1: Add `@podium/tools` to `packages/core/package.json` dependencies**
 
 ```json
-"dependencies": { "@maestro/providers": "workspace:*", "@maestro/tools": "workspace:*" }
+"dependencies": { "@podium/providers": "workspace:*", "@podium/tools": "workspace:*" }
 ```
 
 - [ ] **Step 2: Extend `packages/core/test/loop.test.ts` with the loop test**
@@ -1648,8 +1648,8 @@ Append to the existing file:
 ```ts
 import { runTurn } from '../src/loop.js'
 import { ContextManager } from '../src/context.js'
-import type { Provider, ChatEvent } from '@maestro/providers'
-import type { Tool } from '@maestro/tools'
+import type { Provider, ChatEvent } from '@podium/providers'
+import type { Tool } from '@podium/tools'
 
 function fakeProvider(scripts: ChatEvent[][]): Provider {
   let turn = 0
@@ -1693,8 +1693,8 @@ Expected: FAIL — cannot find module `../src/loop.js`.
 - [ ] **Step 4: Implement `packages/core/src/loop.ts`**
 
 ```ts
-import type { Provider, ChatMessage, ToolCall } from '@maestro/providers'
-import type { Tool } from '@maestro/tools'
+import type { Provider, ChatMessage, ToolCall } from '@podium/providers'
+import type { Tool } from '@podium/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
 
@@ -1806,7 +1806,7 @@ git commit -m "feat(core): agentic loop with native tool calling + pre-step auto
 
 ```json
 {
-  "name": "@maestro/tui",
+  "name": "@podium/tui",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -1815,8 +1815,8 @@ git commit -m "feat(core): agentic loop with native tool calling + pre-step auto
   "scripts": { "build": "tsup src/index.ts --format esm --dts" },
   "dependencies": {
     "ink": "^5.0.0", "react": "^18.3.0",
-    "@maestro/core": "workspace:*", "@maestro/providers": "workspace:*",
-    "@maestro/hardware": "workspace:*", "@maestro/tools": "workspace:*"
+    "@podium/core": "workspace:*", "@podium/providers": "workspace:*",
+    "@podium/hardware": "workspace:*", "@podium/tools": "workspace:*"
   },
   "devDependencies": { "ink-testing-library": "^4.0.0", "@types/react": "^18.3.0" }
 }
@@ -1862,7 +1862,7 @@ Expected: FAIL — cannot find module `../src/ContextMeter.js`.
 ```tsx
 import React from 'react'
 import { Box, Text } from 'ink'
-import type { ContextStats } from '@maestro/core'
+import type { ContextStats } from '@podium/core'
 
 function k(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
@@ -1942,7 +1942,7 @@ Expected: FAIL — cannot find module `../src/ModelPicker.js`.
 ```tsx
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import type { FitVerdict } from '@maestro/hardware'
+import type { FitVerdict } from '@podium/hardware'
 
 export interface ModelRow {
   id: string
@@ -2017,17 +2017,17 @@ git commit -m "feat(tui): ModelPicker with fit verdicts, install/download + tool
 
 ```json
 {
-  "name": "maestro-cli",
+  "name": "podium-cli",
   "version": "0.1.0",
   "type": "module",
-  "bin": { "maestro": "./bin/maestro.js" },
+  "bin": { "podium": "./bin/podium.js" },
   "main": "./dist/index.js",
   "scripts": { "build": "tsup src/index.ts --format esm" },
   "dependencies": {
     "ink": "^5.0.0", "react": "^18.3.0",
-    "@maestro/core": "workspace:*", "@maestro/providers": "workspace:*",
-    "@maestro/hardware": "workspace:*", "@maestro/tools": "workspace:*",
-    "@maestro/tui": "workspace:*"
+    "@podium/core": "workspace:*", "@podium/providers": "workspace:*",
+    "@podium/hardware": "workspace:*", "@podium/tools": "workspace:*",
+    "@podium/tui": "workspace:*"
   }
 }
 ```
@@ -2052,7 +2052,7 @@ import path from 'node:path'
 import { loadConfig, saveConfig } from '../src/config.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-cfg-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-cfg-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('config', () => {
@@ -2080,26 +2080,26 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-export interface MaestroConfig {
+export interface PodiumConfig {
   backend: 'ollama' | 'lmstudio' | 'mlx'
   model: string
   contextSize: number
 }
 
 function configDir(override?: string): string {
-  return override ?? path.join(os.homedir(), '.maestro')
+  return override ?? path.join(os.homedir(), '.podium')
 }
 
-export async function loadConfig(dir?: string): Promise<MaestroConfig | null> {
+export async function loadConfig(dir?: string): Promise<PodiumConfig | null> {
   try {
     const raw = await readFile(path.join(configDir(dir), 'config.json'), 'utf8')
-    return JSON.parse(raw) as MaestroConfig
+    return JSON.parse(raw) as PodiumConfig
   } catch {
     return null
   }
 }
 
-export async function saveConfig(cfg: MaestroConfig, dir?: string): Promise<void> {
+export async function saveConfig(cfg: PodiumConfig, dir?: string): Promise<void> {
   const d = configDir(dir)
   await mkdir(d, { recursive: true })
   await writeFile(path.join(d, 'config.json'), JSON.stringify(cfg, null, 2))
@@ -2115,7 +2115,7 @@ Expected: PASS (2 tests).
 
 ```bash
 git add -A
-git commit -m "feat(cli): ~/.maestro/config.json load/save"
+git commit -m "feat(cli): ~/.podium/config.json load/save"
 ```
 
 ---
@@ -2134,8 +2134,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { render } from 'ink-testing-library'
 import React from 'react'
 import { buildModelRows } from '../src/SetupWizard.js'
-import type { CatalogModel } from '@maestro/providers'
-import type { SystemInfo } from '@maestro/hardware'
+import type { CatalogModel } from '@podium/providers'
+import type { SystemInfo } from '@podium/hardware'
 
 const sys: SystemInfo = {
   totalMemoryBytes: 16 * 1024 ** 3, totalMemoryGB: 16, usableMemoryGB: 11.2,
@@ -2170,8 +2170,8 @@ Expected: FAIL — cannot find module `../src/SetupWizard.js`.
 ```tsx
 import React, { useState } from 'react'
 import { Box, Text } from 'ink'
-import { estimateFit, type SystemInfo } from '@maestro/hardware'
-import type { CatalogModel, Provider, PullProgress } from '@maestro/providers'
+import { estimateFit, type SystemInfo } from '@podium/hardware'
+import type { CatalogModel, Provider, PullProgress } from '@podium/providers'
 import { ModelPicker, type ModelRow } from './ModelPicker.js'
 
 export function buildModelRows(cat: CatalogModel[], sys: SystemInfo, installed: Set<string>): ModelRow[] {
@@ -2217,7 +2217,7 @@ export function SetupWizard(props: {
 
   return (
     <Box flexDirection="column">
-      <Text bold>Maestro setup · {props.sys.chip} · {props.sys.totalMemoryGB}GB</Text>
+      <Text bold>Podium setup · {props.sys.chip} · {props.sys.totalMemoryGB}GB</Text>
       <ModelPicker rows={rows} onSelect={choose} />
     </Box>
   )
@@ -2290,7 +2290,7 @@ Expected: FAIL — cannot find module `../src/Repl.js`.
 ```tsx
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import type { ContextStats } from '@maestro/core'
+import type { ContextStats } from '@podium/core'
 import { ContextMeter } from './ContextMeter.js'
 
 export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool'; text: string }
@@ -2352,7 +2352,7 @@ git commit -m "feat(tui): Repl component — input, transcript, embedded context
 ## Task 18: `cli` — app wiring (wizard-or-repl) + entrypoint
 
 **Files:**
-- Create: `packages/cli/src/app.tsx`, `packages/cli/src/index.ts`, `packages/cli/bin/maestro.js`
+- Create: `packages/cli/src/app.tsx`, `packages/cli/src/index.ts`, `packages/cli/bin/podium.js`
 - Test: `packages/cli/test/decide.test.ts`
 
 - [ ] **Step 1: Write the failing test `packages/cli/test/decide.test.ts`**
@@ -2384,19 +2384,19 @@ Expected: FAIL — cannot find module `../src/app.js`.
 ```tsx
 import React, { useState, useEffect } from 'react'
 import { Box, Text, useApp } from 'ink'
-import { computeSystemInfo, type SystemInfo } from '@maestro/hardware'
-import { OllamaProvider, loadCatalog } from '@maestro/providers'
-import type { HealthStatus, CatalogModel } from '@maestro/providers'
+import { computeSystemInfo, type SystemInfo } from '@podium/hardware'
+import { OllamaProvider, loadCatalog } from '@podium/providers'
+import type { HealthStatus, CatalogModel } from '@podium/providers'
 import {
   ContextManager, buildSystemPrompt, runTurn, type ContextStats,
-} from '@maestro/core'
-import { allTools } from '@maestro/tools'
-import { SetupWizard, Repl, type TranscriptEntry } from '@maestro/tui'
-import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
+} from '@podium/core'
+import { allTools } from '@podium/tools'
+import { SetupWizard, Repl, type TranscriptEntry } from '@podium/tui'
+import { loadConfig, saveConfig, type PodiumConfig } from './config.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
-export function decideStartScreen(cfg: MaestroConfig | null, health: HealthStatus): StartScreen {
+export function decideStartScreen(cfg: PodiumConfig | null, health: HealthStatus): StartScreen {
   if (!cfg) return 'setup'
   if (!health.running) return 'backend-error'
   return 'repl'
@@ -2408,7 +2408,7 @@ export function App(): React.ReactElement {
   const [sys, setSys] = useState<SystemInfo | null>(null)
   const [catalog, setCatalog] = useState<CatalogModel[]>([])
   const [installed, setInstalled] = useState<Set<string>>(new Set())
-  const [cfg, setCfg] = useState<MaestroConfig | null>(null)
+  const [cfg, setCfg] = useState<PodiumConfig | null>(null)
   const [cm, setCm] = useState<ContextManager | null>(null)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [stats, setStats] = useState<ContextStats>({ used: 0, effective: 0, window: 0, percentUsed: 0 })
@@ -2427,14 +2427,14 @@ export function App(): React.ReactElement {
     })()
   }, [])
 
-  function initRepl(config: MaestroConfig) {
+  function initRepl(config: PodiumConfig) {
     const mgr = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
     setCm(mgr)
     setStats(mgr.stats())
   }
 
   async function onWizardComplete(r: { model: string; contextSize: number }) {
-    const next: MaestroConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize }
+    const next: PodiumConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize }
     await saveConfig(next)
     setCfg(next); initRepl(next); setScreen('repl')
   }
@@ -2455,7 +2455,7 @@ export function App(): React.ReactElement {
     setBusy(false)
   }
 
-  if (screen === 'loading' || !sys) return <Text>Starting Maestro…</Text>
+  if (screen === 'loading' || !sys) return <Text>Starting Podium…</Text>
   if (screen === 'backend-error')
     return <Text color="red">Ollama is not running. Start it with `ollama serve` and relaunch.</Text>
   if (screen === 'setup')
@@ -2481,7 +2481,7 @@ export function main(): void {
 }
 ```
 
-- [ ] **Step 5: Implement `packages/cli/bin/maestro.js`**
+- [ ] **Step 5: Implement `packages/cli/bin/podium.js`**
 
 ```js
 #!/usr/bin/env node
@@ -2517,7 +2517,7 @@ git commit -m "feat(cli): wire hardware/providers/core/tools/tui into wizard-or-
 - [ ] **Step 1: Create `README.md`**
 
 ```markdown
-# Maestro
+# Podium
 
 A local-model terminal coding agent, optimized for small context windows and modest Macs.
 
@@ -2529,28 +2529,28 @@ A local-model terminal coding agent, optimized for small context windows and mod
 ```bash
 pnpm install
 pnpm -r build
-node packages/cli/bin/maestro.js
+node packages/cli/bin/podium.js
 ```
 
 ## First run
-Maestro detects your Mac's memory, shows only models that will run, downloads your
+Podium detects your Mac's memory, shows only models that will run, downloads your
 pick, and drops you into a REPL with a live context meter.
 ```
 
 - [ ] **Step 2: Manual smoke test — fresh setup**
 
-Pre-req: `ollama serve` is running; `~/.maestro/config.json` does NOT exist (back it up if present).
-Run: `pnpm -r build && node packages/cli/bin/maestro.js`
+Pre-req: `ollama serve` is running; `~/.podium/config.json` does NOT exist (back it up if present).
+Run: `pnpm -r build && node packages/cli/bin/podium.js`
 Expected: setup wizard appears showing your chip + RAM; the 7B model shows 🟢 on a 16GB+ Mac. Selecting an uninstalled model streams a download %; selecting an installed one drops straight to the REPL.
 
 - [ ] **Step 3: Manual smoke test — agent does real work**
 
-In the REPL, type: `create a file hello.txt containing the word maestro, then read it back`
-Expected: transcript shows a `Write(...)` tool line then a `Read(...)` tool line; `hello.txt` exists on disk with `maestro`; the context meter advances. Confirm with `cat hello.txt`.
+In the REPL, type: `create a file hello.txt containing the word podium, then read it back`
+Expected: transcript shows a `Write(...)` tool line then a `Read(...)` tool line; `hello.txt` exists on disk with `podium`; the context meter advances. Confirm with `cat hello.txt`.
 
 - [ ] **Step 4: Manual smoke test — persistence**
 
-Quit (Ctrl+C) and rerun `node packages/cli/bin/maestro.js`.
+Quit (Ctrl+C) and rerun `node packages/cli/bin/podium.js`.
 Expected: no wizard — it loads the saved model and goes straight to the REPL.
 
 - [ ] **Step 5: Commit**
@@ -2568,6 +2568,6 @@ git commit -m "docs: add README and Phase 1 smoke-test checklist"
 
 **Placeholder scan:** No TBD/TODO; every code step shows complete code.
 
-**Type consistency:** `Provider`/`ChatEvent`/`ToolCall`/`ToolSchema` defined in Task 4 are consumed unchanged in Tasks 5–18. `ContextStats` (Task 6) is consumed by ContextMeter (Task 13) and Repl (Task 17). `Tool`/`ToolContext` (Task 9) used by all tools and the loop (Task 12). `MaestroConfig` (Task 15) used by app (Task 18). `FitVerdict`/`SystemInfo`/`CatalogModel` consistent across hardware/providers/tui.
+**Type consistency:** `Provider`/`ChatEvent`/`ToolCall`/`ToolSchema` defined in Task 4 are consumed unchanged in Tasks 5–18. `ContextStats` (Task 6) is consumed by ContextMeter (Task 13) and Repl (Task 17). `Tool`/`ToolContext` (Task 9) used by all tools and the loop (Task 12). `PodiumConfig` (Task 15) used by app (Task 18). `FitVerdict`/`SystemInfo`/`CatalogModel` consistent across hardware/providers/tui.
 
 **Deferred-to-later-phase items are explicit, not gaps.**

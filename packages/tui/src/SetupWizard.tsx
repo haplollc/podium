@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { estimateFit, type SystemInfo } from '@maestro/hardware'
-import { recommendedFor, type CatalogModel, type Provider, type PullProgress } from '@maestro/providers'
+import { estimateFit, type SystemInfo } from '@podium/hardware'
+import { recommendedFor, type CatalogModel, type Provider, type PullProgress } from '@podium/providers'
 import { ModelPicker, type ModelRow } from './ModelPicker.js'
 
 export function buildModelRows(cat: CatalogModel[], sys: SystemInfo, installed: Set<string>): ModelRow[] {
@@ -110,7 +110,7 @@ export function SetupWizard(props: {
 
   return (
     <Box borderStyle="round" borderColor="magenta" paddingX={2} paddingY={1} flexDirection="column">
-      <Text><Text color="magenta" bold>✦ Maestro setup</Text><Text dimColor>  ·  pick, download, or delete a model</Text></Text>
+      <Text><Text color="magenta" bold>✦ Podium setup</Text><Text dimColor>  ·  pick, download, or delete a model</Text></Text>
 
       <Box marginTop={1} flexDirection="column">
         <Text>

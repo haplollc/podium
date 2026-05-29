@@ -1,10 +1,10 @@
 {
-  "name": "@maestro/providers",
+  "name": "@podium/providers",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
   "scripts": { "build": "tsup src/index.ts --format esm --dts" },
-  "dependencies": { "@maestro/hardware": "workspace:*", "execa": "^9.4.0" }
+  "dependencies": { "@podium/hardware": "workspace:*", "execa": "^9.4.0" }
 }

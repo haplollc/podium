@@ -1,7 +1,7 @@
 import type { SkillMeta } from './types.js'
 
 /**
- * Built-in skills shipped with Maestro. Inlined (not files) so they survive
+ * Built-in skills shipped with Podium. Inlined (not files) so they survive
  * bundling and are available on a fresh install. A user's own SKILL.md with the
  * same name overrides these.
  */

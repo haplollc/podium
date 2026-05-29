@@ -25,8 +25,8 @@ export async function discoverSkills(roots: string[]): Promise<SkillMeta[]> {
 
 export function defaultSkillRoots(home: string, cwd: string): string[] {
   return [
-    path.join(cwd, '.maestro', 'skills'),
-    path.join(home, '.maestro', 'skills'),
+    path.join(cwd, '.podium', 'skills'),
+    path.join(home, '.podium', 'skills'),
     path.join(home, '.claude', 'skills'), // Claude Code compatibility
   ]
 }

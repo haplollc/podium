@@ -7,7 +7,7 @@ import { writeTool } from '../src/write.js'
 import { editTool } from '../src/edit.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('file tools', () => {

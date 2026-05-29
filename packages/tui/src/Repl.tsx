@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
-import type { ContextStats } from '@maestro/core'
+import type { ContextStats } from '@podium/core'
 import { ContextMeter } from './ContextMeter.js'
 
 export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool'; text: string }

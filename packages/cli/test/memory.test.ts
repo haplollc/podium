@@ -7,8 +7,8 @@ import { loadMemory } from '../src/memory.js'
 let home: string
 let cwd: string
 beforeEach(async () => {
-  home = await mkdtemp(path.join(tmpdir(), 'maestro-home-'))
-  cwd = await mkdtemp(path.join(tmpdir(), 'maestro-cwd-'))
+  home = await mkdtemp(path.join(tmpdir(), 'podium-home-'))
+  cwd = await mkdtemp(path.join(tmpdir(), 'podium-cwd-'))
 })
 afterEach(async () => {
   await rm(home, { recursive: true, force: true })
@@ -21,9 +21,9 @@ describe('loadMemory', () => {
   })
 
   it('concatenates user then project memory', async () => {
-    await mkdir(path.join(home, '.maestro'), { recursive: true })
-    await writeFile(path.join(home, '.maestro', 'MAESTRO.md'), 'user rule')
-    await writeFile(path.join(cwd, 'MAESTRO.md'), 'project rule')
+    await mkdir(path.join(home, '.podium'), { recursive: true })
+    await writeFile(path.join(home, '.podium', 'PODIUM.md'), 'user rule')
+    await writeFile(path.join(cwd, 'PODIUM.md'), 'project rule')
     const mem = await loadMemory(cwd, home)
     expect(mem).toContain('user rule')
     expect(mem).toContain('project rule')

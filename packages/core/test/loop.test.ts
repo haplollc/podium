@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { buildSystemPrompt } from '../src/system-prompt.js'
 import { runTurn } from '../src/loop.js'
 import { ContextManager } from '../src/context.js'
-import type { Provider, ChatEvent } from '@maestro/providers'
-import type { Tool } from '@maestro/tools'
+import type { Provider, ChatEvent } from '@podium/providers'
+import type { Tool } from '@podium/tools'
 
 describe('buildSystemPrompt', () => {
   it('is compact (<1200 tokens worth of chars) and includes cwd + tool discipline', () => {

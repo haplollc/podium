@@ -39,31 +39,31 @@ importers:
         specifier: ^2.6.0
         version: 2.9.0
     devDependencies:
-      '@maestro/core':
+      '@podium/core':
         specifier: workspace:*
         version: link:../core
-      '@maestro/hardware':
+      '@podium/hardware':
         specifier: workspace:*
         version: link:../hardware
-      '@maestro/providers':
+      '@podium/providers':
         specifier: workspace:*
         version: link:../providers
-      '@maestro/skills':
+      '@podium/skills':
         specifier: workspace:*
         version: link:../skills
-      '@maestro/tools':
+      '@podium/tools':
         specifier: workspace:*
         version: link:../tools
-      '@maestro/tui':
+      '@podium/tui':
         specifier: workspace:*
         version: link:../tui
 
   packages/core:
     dependencies:
-      '@maestro/providers':
+      '@podium/providers':
         specifier: workspace:*
         version: link:../providers
-      '@maestro/tools':
+      '@podium/tools':
         specifier: workspace:*
         version: link:../tools
 
@@ -71,7 +71,7 @@ importers:
 
   packages/providers:
     dependencies:
-      '@maestro/hardware':
+      '@podium/hardware':
         specifier: workspace:*
         version: link:../hardware
       execa:
@@ -86,7 +86,7 @@ importers:
 
   packages/tools:
     dependencies:
-      '@maestro/providers':
+      '@podium/providers':
         specifier: workspace:*
         version: link:../providers
       execa:
@@ -95,16 +95,16 @@ importers:
 
   packages/tui:
     dependencies:
-      '@maestro/core':
+      '@podium/core':
         specifier: workspace:*
         version: link:../core
-      '@maestro/hardware':
+      '@podium/hardware':
         specifier: workspace:*
         version: link:../hardware
-      '@maestro/providers':
+      '@podium/providers':
         specifier: workspace:*
         version: link:../providers
-      '@maestro/tools':
+      '@podium/tools':
         specifier: workspace:*
         version: link:../tools
       ink:

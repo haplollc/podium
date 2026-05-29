@@ -5,7 +5,7 @@ import path from 'node:path'
 import { loadHooks, runHooks } from '../src/hooks.js'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'maestro-hooks-')) })
+beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'podium-hooks-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('loadHooks', () => {

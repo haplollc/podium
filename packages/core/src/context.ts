@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@maestro/providers'
+import type { ChatMessage } from '@podium/providers'
 import { estimateMessageTokens } from './tokens.js'
 import type { ContextStats } from './types.js'
 

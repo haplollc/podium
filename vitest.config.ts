@@ -7,12 +7,12 @@ const pkg = (name: string) =>
 export default defineConfig({
   resolve: {
     alias: {
-      '@maestro/hardware': pkg('hardware'),
-      '@maestro/providers': pkg('providers'),
-      '@maestro/core': pkg('core'),
-      '@maestro/tools': pkg('tools'),
-      '@maestro/tui': pkg('tui'),
-      '@maestro/skills': pkg('skills'),
+      '@podium/hardware': pkg('hardware'),
+      '@podium/providers': pkg('providers'),
+      '@podium/core': pkg('core'),
+      '@podium/tools': pkg('tools'),
+      '@podium/tui': pkg('tui'),
+      '@podium/skills': pkg('skills'),
     },
   },
   test: {
