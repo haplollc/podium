@@ -1,8 +1,8 @@
 class Podium < Formula
   desc "Local-model terminal coding agent optimized for small context windows"
   homepage "https://github.com/haplollc/podium"
-  url "https://registry.npmjs.org/podium-cli/-/podium-cli-0.3.4.tgz"
-  sha256 "7426c54c49ba12b93b69a818a455d2b560b578dd86e97688d9dc7834c4c21815"
+  url "https://registry.npmjs.org/podium-cli/-/podium-cli-0.3.5.tgz"
+  sha256 "e933c7b61e28d872bbb986844460b1dcc7541ba519fd87426e606973577e340d"
   license "MIT"
 
   depends_on "node"
