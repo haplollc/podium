@@ -10,7 +10,7 @@ import {
 } from '@podium/core'
 import { allTools, baseTools, type TodoItem, type TodoStore } from '@podium/tools'
 import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing, mergeSkills, builtinSkills } from '@podium/skills'
-import { SetupWizard, Repl, PermissionPrompt, Banner, type TranscriptEntry, type MetricsData } from '@podium/tui'
+import { SetupWizard, Repl, PermissionPrompt, type TranscriptEntry, type MetricsData } from '@podium/tui'
 import { loadConfig, saveConfig, type PodiumConfig } from './config.js'
 import { loadMemory } from './memory.js'
 import { loadSoul, DEFAULT_SOUL } from './soul.js'
@@ -323,7 +323,6 @@ export function App(): React.ReactElement {
 
   return (
     <Box flexDirection="column">
-      <Banner model={cfg?.model ?? 'no model'} cwd={process.cwd()} />
       {planMode && <Text color="magenta">— PLAN MODE (read-only) —</Text>}
       {yoloOn && <Text color="red">⚠ YOLO — skipping all permission prompts</Text>}
       <Repl
@@ -332,6 +331,7 @@ export function App(): React.ReactElement {
         metrics={metricsOn ? (metricsData ?? undefined) : undefined}
         onAbort={abortTurn}
         todos={todos}
+        model={cfg?.model ?? 'no model'} cwd={process.cwd()}
       />
       {pending && (
         <PermissionPrompt

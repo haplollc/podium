@@ -54,6 +54,23 @@ const echoTool = (calls: string[]): Tool => ({
   run: async (a) => { calls.push(String(a.value)); return `echoed ${a.value}` },
 })
 
+describe('runTurn promise-nudge', () => {
+  it('pushes the model to act when it only states an intention, then runs the tool', async () => {
+    const calls: string[] = []
+    const provider = fakeProvider([
+      [{ type: 'text', delta: "Sure, I'll search the web for you. Let me do that now." }, { type: 'done' }],
+      [{ type: 'tool_call', call: { id: '1', name: 'Echo', arguments: { value: 'searched' } } }, { type: 'done' }],
+      [{ type: 'text', delta: 'Here are the results.' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'search the web' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys' })
+    expect(calls).toEqual(['searched'])          // it actually acted after the nudge
+    expect(out).toBe('Here are the results.')
+    expect(cm.messages().some(m => m.role === 'user' && m.content.includes('did NOT call any tool'))).toBe(true)
+  })
+})
+
 describe('runTurn repeat-guard', () => {
   it('blocks an identical tool call after 2 runs and tells the model to change approach', async () => {
     let runCount = 0

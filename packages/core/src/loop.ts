@@ -42,12 +42,20 @@ export interface RunTurnOpts {
   keepAlive?: string
   /** Abort the whole turn (user pressed Esc). */
   signal?: AbortSignal
+  /** Max times to push the model to act after it only states an intention. Default 2. */
+  maxPromiseNudges?: number
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
 function looksLikeToolAttempt(text: string, schemas: { name: string }[]): boolean {
   const hasBrace = text.includes('{') && text.includes('}')
   return hasBrace && schemas.some(s => text.includes(s.name))
+}
+
+/** Heuristic: the model promised to act ("Sure, I'll…", "Let me search…") but called no tool. */
+function looksLikePromise(text: string): boolean {
+  return /\b(i'?ll|i am going to|i'?m going to|i will|let me|let'?s|now i'?ll|first,?\s*i'?ll|i'?m (searching|creating|writing|fetching|looking|going|running))\b/i.test(text)
+    || /\b(let'?s (do|search|create|write|run)|going to (create|write|run|search|fetch|do)|searching the web|create the (script|file)|fetch (the|search))\b/i.test(text)
 }
 
 /** Runs one user turn to completion: loops model<->tools until the model stops
@@ -60,6 +68,8 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
 
   const mode = opts.planMode ? 'plan' : (opts.mode ?? 'default')
   let repairs = 0
+  let nudges = 0
+  const maxNudges = opts.maxPromiseNudges ?? 2
   let finalText = ''
   let modelStarted = false
   const callCounts = new Map<string, number>()   // detect repeated identical tool calls
@@ -110,6 +120,15 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         cm.add({
           role: 'user',
           content: 'Your previous message looked like a tool call but could not be parsed. Reply with ONLY a JSON object of the form {"name": <tool>, "arguments": {...}} and no other text.',
+        })
+        continue
+      }
+      // Promise-without-action: the model said it would act but called no tool. Push it to actually do it.
+      if (nudges < maxNudges && looksLikePromise(assistantText)) {
+        nudges++
+        cm.add({
+          role: 'user',
+          content: 'You stated an intention but did NOT call any tool, so nothing happened. Do it NOW by calling the appropriate tool — WebSearch to search, Write to create a file, Bash to run a command. Do not describe what you will do; emit the tool call.',
         })
         continue
       }

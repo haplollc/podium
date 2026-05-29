@@ -35,7 +35,9 @@ describe('Repl', () => {
       const f = lastFrame() ?? ''
       expect(f).toContain('/model')
       expect(f).toContain('/models')
-      expect(f).not.toContain('/help')
+      // '/help' isn't a match for prefix "m"; the banner mentions it, so check the menu lines only.
+      const menuLines = f.split('\n').filter(l => /^\s*\/\w/.test(l)).join('\n')
+      expect(menuLines).not.toContain('/help')
     })
   })
 

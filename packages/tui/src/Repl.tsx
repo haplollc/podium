@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, Static, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import type { ContextStats } from '@podium/core'
 import type { TodoItem } from '@podium/tools'
 import { ContextMeter } from './ContextMeter.js'
 import { MetricsBar, type MetricsData } from './MetricsBar.js'
 import { Markdown } from './Markdown.js'
+import { Banner } from './Banner.js'
 
-export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output'; text: string }
+export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output' | 'banner'; text: string }
 
 export function Repl(props: {
   stats: ContextStats
@@ -20,6 +21,8 @@ export function Repl(props: {
   metrics?: MetricsData         // live dashboard over the input (toggle with /metrics)
   onAbort?: () => void          // Esc while busy stops the running turn
   todos?: TodoItem[]            // live task checklist shown above the input
+  model?: string                // for the banner (printed once, at top)
+  cwd?: string
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
@@ -91,25 +94,24 @@ export function Repl(props: {
 
   return (
     <Box flexDirection="column">
-      {props.transcript.map((e, i) => {
-        if (e.role === 'output') {
-          const lines = e.text.split('\n')
-          return (
-            <Box key={i} flexDirection="column" marginLeft={2}>
-              {lines.map((line, j) => (
-                <Text key={j} dimColor>{j === 0 ? '  ⎿  ' : '     '}{line}</Text>
-              ))}
-            </Box>
-          )
-        }
-        if (e.role === 'tool') {
-          return <Text key={i}><Text color="green">⏺</Text> {e.text}</Text>
-        }
-        if (e.role === 'assistant') {
-          return <Box key={i} marginTop={1}><Markdown content={e.text} /></Box>
-        }
-        return <Text key={i} color="cyan">› {e.text}</Text>
-      })}
+      <Static items={[{ role: 'banner' as const, text: '' }, ...props.transcript]}>
+        {(e, i) => {
+          if (e.role === 'banner') return <Box key="banner"><Banner model={props.model ?? ''} cwd={props.cwd ?? ''} /></Box>
+          if (e.role === 'output') {
+            const lines = e.text.split('\n')
+            return (
+              <Box key={i} flexDirection="column" marginLeft={2}>
+                {lines.map((line, j) => (
+                  <Text key={j} dimColor>{j === 0 ? '  ⎿  ' : '     '}{line}</Text>
+                ))}
+              </Box>
+            )
+          }
+          if (e.role === 'tool') return <Text key={i}><Text color="green">⏺</Text> {e.text}</Text>
+          if (e.role === 'assistant') return <Box key={i} marginTop={1}><Markdown content={e.text} /></Box>
+          return <Text key={i} color="cyan">› {e.text}</Text>
+        }}
+      </Static>
 
       {props.busy && props.streaming && !/```|\{\s*"name"\s*:|^\s*[{[]/.test(props.streaming)
         ? <Box marginTop={1}><Markdown content={props.streaming} /></Box>
