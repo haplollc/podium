@@ -1,9 +1,63 @@
-# Maestro
+<div align="center">
 
-A local-model terminal coding agent — Claude Code's feature set (agentic loop, tools,
-skills, plan mode, subagents, slash commands, auto-compaction) running **100% on local
-models**, optimized for **small context windows** and **modest Macs** (16 GB floor,
-8 GB experimental tier).
+# ✦ Maestro
+
+### A local-model terminal coding agent — Claude Code's powers, 100% on your machine.
+
+Agentic loop · tools · skills · plan mode · subagents · auto-compaction —
+tuned for **small context windows** and **modest Macs**.
+
+[![npm](https://img.shields.io/npm/v/maestro-cli?color=cb3837&logo=npm)](https://www.npmjs.com/package/maestro-cli)
+[![Homebrew](https://img.shields.io/badge/brew-haplollc%2Ftap%2Fmaestro-FBB040?logo=homebrew&logoColor=white)](https://github.com/haplollc/maestro)
+[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![platform](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple)](https://www.apple.com/mac/)
+[![local-first](https://img.shields.io/badge/local-first%20·%20no%20cloud-22c55e)](#)
+
+</div>
+
+---
+
+```
+╭──────────────────────────────────────────────────────────────╮
+│ ✦ Maestro  ·  local-model coding agent                        │
+│ qwen2.5-coder:14b  ·  ~/projects/acme-api                     │
+│ type / for commands · /help for the list                      │
+╰──────────────────────────────────────────────────────────────╯
+› refactor the auth middleware to use async/await
+  ⚙ Read(src/middleware/auth.js)
+  ⚙ Edit(src/middleware/auth.js)
+Done — converted the three callback chains to async/await and kept the
+error semantics identical. Want me to run the tests?
+
+⠹ Pondering…
+▓▓▓░░░░░░░ 34% · 4.9k/14.4k
+──────────────────────────────────────────────────────────────────
+› /m
+  /model      ← run, download, or delete a model
+  /models
+ ↑/↓ select · Tab complete · Enter run
+──────────────────────────────────────────────────────────────────
+```
+
+## Why Maestro?
+
+Cloud coding agents are wonderful — until you're offline, on a private codebase,
+rate-limited, or just don't want your source leaving the building. Maestro gives you
+the same agentic experience with a model running **entirely on your Mac**.
+
+The hard part of "local" is that the models are smaller and the context windows are
+tight. Maestro is built around that constraint:
+
+- 🧠 **Honest hardware fitting** — it only ever offers you models that will actually run,
+  with 🟢/🟡/🔴 verdicts computed for *your* machine. No more OOM surprises.
+- 🪶 **Tiny footprint by design** — a sub-1k-token system prompt, progressively-disclosed
+  skills, capped tool output, and aggressive auto-compaction keep the window lean.
+- 🔧 **Tool-calling that actually works** — many local models emit tool calls as plain
+  text instead of using the native API. Maestro's dual-path parser catches both, with
+  bounded auto-repair, so the agent loop doesn't stall.
+- ⚡ **Fast after the first token** — the model is pre-warmed on launch and kept resident,
+  and responses stream out as they're generated.
 
 ## Install
 
@@ -12,22 +66,22 @@ models**, optimized for **small context windows** and **modest Macs** (16 GB flo
 npm install -g maestro-cli
 
 # Homebrew
-brew install jaredcassoutt/tap/maestro
+brew install haplollc/tap/maestro
 ```
 
-Update any time with:
+Update anytime — it detects how you installed it:
 
 ```bash
-maestro update      # detects npm vs Homebrew automatically
+maestro update
 ```
 
-## Requirements
+### Requirements
 
 - macOS (Apple Silicon), Node ≥ 20
-- A local-model backend, any of:
-  - **[Ollama](https://ollama.com)** (recommended) — `brew install ollama && ollama serve`
-  - **LM Studio** — start its local server (`http://localhost:1234`)
-  - **MLX** — `mlx_lm.server` (`http://localhost:8080`)
+- A local-model backend (any one):
+  - **[Ollama](https://ollama.com)** — recommended · `brew install ollama && ollama serve`
+  - **LM Studio** — start its local server (`localhost:1234`)
+  - **MLX** — `mlx_lm.server` (`localhost:8080`)
 
 ## First run
 
@@ -35,53 +89,105 @@ maestro update      # detects npm vs Homebrew automatically
 maestro
 ```
 
-Maestro detects your Mac's memory, shows **only models that will actually run** (with
-🟢/🟡/🔴 fit verdicts), downloads your pick with a progress bar, and drops you into a
-REPL with a live context meter.
-
-## In-session commands
+Maestro detects your Mac's memory, shows **only the models that will run**, downloads
+your pick with a progress bar, and drops you into a REPL with a live context meter.
 
 ```
-/model            re-pick or download a model
-/models           list installed models
-/pull <name>      download a model
-/skills           list available skills
-/plan             toggle plan mode (read-only until you're ready)
-/context          show the context meter + token breakdown
-/compact          summarize + shrink the conversation now
-/clear            reset the conversation
-/help             list commands
-/<skill-name>     run a skill (Claude Code-compatible SKILL.md)
+╭──────────────────────────────────────────────────────────────╮
+│ ✦ Maestro setup  ·  pick, download, or delete a model         │
+│ Machine  Apple M2 · 24 GB RAM  (≈16.8 GB usable for a model)  │
+│ Backend  Ollama ✓   ·   runs 100% on your machine             │
+│ 🟢 runs comfortably   🟡 tight   (8 too big for this Mac)     │
+│   🟢 Qwen2.5-Coder 7B     4.7 GB · ✓ installed                │
+│ ❯ 🟢 Qwen2.5-Coder 14B      9 GB ★ recommended · ✓ installed  │
+│   🟡 gpt-oss 20B           14 GB · ⤓ download                 │
+│   🔴 Qwen3-Coder 30B       19 GB · ⤓ download                 │
+╰──────────────────────────────────────────────────────────────╯
 ```
 
 ## Features
 
-- **Honest hardware fitting** — never offers a model that won't run on your machine.
-- **Dual-path tool calling** — native function-calling plus a parsed-text fallback for
-  small models that emit tool calls as JSON text, with bounded auto-repair.
-- **Aggressive context management** — token budgeter, live meter, retained-prefix +
-  summarize-tail auto-compaction tuned for small windows.
-- **Permission modes** — `default` / `acceptEdits` / `plan` / `yolo`, with interactive
-  approval prompts.
-- **Skills** — Claude Code-compatible `SKILL.md` with progressive disclosure (also reads
-  `~/.claude/skills`).
-- **Subagents** — the `Task` tool spawns isolated-context agents that return one report.
-- **Memory** — hierarchical `MAESTRO.md` / `CLAUDE.md`.
-- **Hooks** — `SessionStart` / `UserPromptSubmit` / `PreToolUse` / `PreCompact` from
-  `~/.maestro/settings.json`.
+| | |
+|---|---|
+| 🛠 **Tools** | Read · Write · Edit · Bash · Grep · Glob · TodoWrite — all output-capped for small contexts |
+| 🧩 **Skills** | Claude Code-compatible `SKILL.md` with progressive disclosure. Ships with `commit`, `review`, `explain`, `test` — and reads your `~/.claude/skills` too |
+| 🤖 **Subagents** | The `Task` tool spawns an isolated-context agent that returns one concise report — keeping exploration out of the main window |
+| 📋 **Plan mode** | `/plan` flips to read-only; the agent investigates and proposes a plan before touching anything |
+| 🎚 **Permission modes** | `default` · `acceptEdits` · `plan` · `yolo`, with interactive y/n approval prompts |
+| 🧠 **Memory** | Hierarchical `MAESTRO.md` / `CLAUDE.md` (user → project) |
+| ✨ **SOUL.md** | Give Maestro a personality/voice — per-project or global |
+| 🪝 **Hooks** | `SessionStart` · `UserPromptSubmit` · `PreToolUse` · `PreCompact` from `~/.maestro/settings.json` |
+| 🔌 **Multi-backend** | Ollama · LM Studio · MLX behind one interface, auto-detected |
+
+## In-session commands
+
+Type `/` and a letter for an autocomplete dropdown.
+
+| Command | What it does |
+|---|---|
+| `/setup` | Re-run the setup wizard |
+| `/model` | Pick, **download**, or **delete** a model |
+| `/models` | List installed models |
+| `/pull <name>` | Download a model |
+| `/skills` | List available skills |
+| `/soul` | Show Maestro's current personality |
+| `/plan` | Toggle plan mode (read-only) |
+| `/context` | Show the context meter + token breakdown |
+| `/compact` | Summarize + shrink the conversation now |
+| `/clear` | Reset the conversation |
+| `/<skill>` | Run a skill (e.g. `/commit`, `/review`) |
+
+## Models
+
+Maestro ships a curated catalog spanning every RAM tier — and shows you exactly what
+fits. A few highlights (full list in [`models/catalog.json`](./models/catalog.json)):
+
+| Tier | Picks |
+|---|---|
+| **8 GB** | `granite4:micro-h` · `qwen2.5-coder:3b` · `smollm2:1.7b` |
+| **16 GB** | `qwen2.5-coder:7b` · `granite4:tiny-h` · `qwen3:8b` · `phi4-mini` |
+| **24 GB** | `qwen2.5-coder:14b` ★ · `gpt-oss:20b` |
+| **32 GB** | `qwen3-coder:30b` · `glm-4.7-flash` · `devstral:24b` · `codestral:22b` |
+| **64 GB** | `qwen3-coder-next` · `gpt-oss:120b` · `llama3.3:70b` |
+
+## How it works
+
+Maestro is a pnpm/TypeScript monorepo of small, focused packages:
+
+```
+packages/
+  hardware/   Mac memory detection + model-fit calculator (🟢/🟡/🔴)
+  providers/  Ollama · LM Studio · MLX behind one Provider interface
+  core/       agentic loop · context manager · compaction · tool-call parser
+  tools/      Read/Write/Edit/Bash/Grep/Glob/TodoWrite + Skill/Task/ExitPlanMode
+  skills/     SKILL.md parse + discovery + progressive-disclosure registry
+  tui/        Ink/React — wizard, REPL, context meter, autocomplete
+  cli/        the `maestro` binary, config, slash commands, hooks
+```
+
+The **context manager** tracks a token budget per turn and auto-compacts (retained
+prefix + summarize-the-tail) before the window fills. The **agentic loop** prefers native
+function-calling but falls back to parsing text-emitted tool calls — the trick that makes
+small local models usable as agents.
 
 ## Develop
 
 ```bash
+git clone https://github.com/haplollc/maestro
+cd maestro
 pnpm install
 pnpm -r build
-pnpm test
+pnpm test                       # 130+ unit tests
 node packages/cli/bin/maestro.js
 
-# Live tests against a real model (requires Ollama + a pulled model):
+# Live tests against a real model (needs Ollama + a pulled model):
 MAESTRO_LIVE=1 pnpm vitest run packages/cli/test/live.test.ts
 ```
 
 ## License
 
-MIT
+[MIT](./LICENSE) © Haplo LLC
+
+<div align="center">
+<sub>Built for people who want their coding agent to stay on their own machine.</sub>
+</div>

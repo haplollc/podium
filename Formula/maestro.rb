@@ -1,6 +1,6 @@
 class Maestro < Formula
   desc "Local-model terminal coding agent optimized for small context windows"
-  homepage "https://github.com/jaredcassoutt/maestro"
+  homepage "https://github.com/haplollc/maestro"
   url "https://registry.npmjs.org/maestro-cli/-/maestro-cli-0.1.0.tgz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000" # bumped by CI on release
   license "MIT"
