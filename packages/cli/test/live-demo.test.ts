@@ -14,21 +14,43 @@ const provider = new OllamaProvider()
 const sys = (cwd: string) => buildSystemPrompt({ cwd, os: process.platform, toolNames: allTools.map(t => t.schema.name) })
 
 describe.skipIf(!LIVE)('live showcase prompts (0.3.x)', () => {
-  it('todo prompt: writes todo.py into the cwd, then runs it', async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), 'podium-todo-'))
+  it('build-and-run prompt: writes primes.py into the cwd, then runs it', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'podium-primes-'))
     const cm = new ContextManager({ window: 16384, outputReserve: 2000 })
-    cm.add({ role: 'user', content: 'create a Python CLI todo.py with add/list/done commands backed by a JSON file, then run it: add two tasks, mark one done, and print the final list.' })
+    cm.add({ role: 'user', content: 'write and run a Python script primes.py that prints the first 15 prime numbers, one per line. show the output here.' })
     const used = new Set<string>()
+    let lastOutput = ''
     const reply = await runTurn({
       provider, model: MODEL, cm, tools: allTools, systemPrompt: sys(dir),
       numCtx: 16384, cwd: dir, keepAlive: '30m',
-      onToolStart: (c) => { used.add(c.name); console.log(`[todo] ${c.name}`) },
+      onToolStart: (c) => { used.add(c.name); console.log(`[primes] ${c.name}`) },
+      onToolResult: (_c, r) => { lastOutput = r },
     })
-    console.log('[todo reply]', reply.slice(0, 200))
-    const file = await readFile(path.join(dir, 'todo.py'), 'utf8').catch(() => '')
+    console.log('[primes out]', lastOutput.split('\n').slice(0, 4).join(' / '))
+    const file = await readFile(path.join(dir, 'primes.py'), 'utf8').catch(() => '')
     await rm(dir, { recursive: true, force: true })
-    expect(used.has('Write')).toBe(true)        // it created the file
-    expect(file.length).toBeGreaterThan(0)        // …in the working dir
+    expect(used.has('Write')).toBe(true)
+    expect(file.length).toBeGreaterThan(0)
+    expect(`${lastOutput}\n${reply}`).toContain('47') // the 15th prime
+  }, 240_000)
+
+  it('chart prompt: writes chart.py and prints a bar chart', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'podium-chart-'))
+    const cm = new ContextManager({ window: 16384, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'write and run a Python script chart.py that prints a labeled ASCII bar chart (using █ blocks) of these values — Mon 3, Tue 7, Wed 2, Thu 9, Fri 5 — and show the output here.' })
+    const used = new Set<string>()
+    let lastOutput = ''
+    const reply = await runTurn({
+      provider, model: MODEL, cm, tools: allTools, systemPrompt: sys(dir),
+      numCtx: 16384, cwd: dir, keepAlive: '30m',
+      onToolStart: (c) => { used.add(c.name); console.log(`[chart] ${c.name}`) },
+      onToolResult: (_c, r) => { lastOutput = r },
+    })
+    console.log('[chart out]', lastOutput.split('\n').slice(0, 6).join(' / '))
+    await rm(dir, { recursive: true, force: true })
+    expect(used.has('Write')).toBe(true)
+    // bar chart should contain block chars or the day labels in the output/reply
+    expect(`${lastOutput}\n${reply}`).toMatch(/█|Mon|Thu/)
   }, 240_000)
 
   it('web prompt: calls WebSearch instead of refusing', async () => {
