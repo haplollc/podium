@@ -60,6 +60,12 @@ function looksLikePromise(text: string): boolean {
     || /\b(let'?s (do|search|create|write|run)|going to (create|write|run|search|fetch|do)|searching the web|create the (script|file)|fetch (the|search))\b/i.test(text)
 }
 
+/** Heuristic: the model refused with its trained "no internet/access" reflex instead of using a tool. */
+function looksLikeRefusal(text: string): boolean {
+  return /\b(can'?t|cannot|unable to|don'?t have|do not have|not able to|i'?m not able)\b[^.\n]*\b(access|browse|search|internet|web|real[- ]?time|online|live)\b/i.test(text)
+    || /\b(no (internet|web|online) access|don'?t have (the )?ability to (browse|search|access))\b/i.test(text)
+}
+
 /** Runs one user turn to completion: loops model<->tools until the model stops
  *  calling tools, returns the final assistant text. Auto-compacts before each step. */
 export async function runTurn(opts: RunTurnOpts): Promise<string> {
@@ -125,12 +131,13 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         })
         continue
       }
-      // Promise-without-action: the model said it would act but called no tool. Push it to actually do it.
-      if (nudges < maxNudges && looksLikePromise(assistantText)) {
+      // The model either promised to act or refused ("I can't access the internet") without
+      // calling a tool. Push it to actually use the tool it has.
+      if (nudges < maxNudges && (looksLikePromise(assistantText) || looksLikeRefusal(assistantText))) {
         nudges++
         cm.add({
           role: 'user',
-          content: 'You stated an intention but did NOT call any tool, so nothing happened. Do it NOW by calling the appropriate tool — WebSearch to search, Write to create a file, Bash to run a command. Do not describe what you will do; emit the tool call.',
+          content: 'Nothing happened — you did not call any tool. You DO have these tools available: WebSearch (you CAN search the web with it), WebFetch, Write, Edit, Bash. Do not claim you lack internet/web/file access and do not just state intentions — call the appropriate tool NOW.',
         })
         continue
       }

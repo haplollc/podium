@@ -67,7 +67,21 @@ describe('runTurn promise-nudge', () => {
     const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys' })
     expect(calls).toEqual(['searched'])          // it actually acted after the nudge
     expect(out).toBe('Here are the results.')
-    expect(cm.messages().some(m => m.role === 'user' && m.content.includes('did NOT call any tool'))).toBe(true)
+    expect(cm.messages().some(m => m.role === 'user' && m.content.includes('did not call any tool'))).toBe(true)
+  })
+
+  it('nudges past a flat "I can\'t access the internet" refusal, then runs the tool', async () => {
+    const calls: string[] = []
+    const provider = fakeProvider([
+      [{ type: 'text', delta: "I'm sorry, but I can't access the internet to search for that." }, { type: 'done' }],
+      [{ type: 'tool_call', call: { id: '1', name: 'Echo', arguments: { value: 'searched' } } }, { type: 'done' }],
+      [{ type: 'text', delta: 'Top 3 results: …' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'search the web' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys' })
+    expect(calls).toEqual(['searched'])
+    expect(out).toContain('Top 3 results')
   })
 })
 
