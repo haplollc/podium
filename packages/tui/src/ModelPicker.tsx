@@ -16,7 +16,12 @@ const VERDICT_ICON: Record<FitVerdict, string> = { fits: '🟢', tight: '🟡', 
 const VERDICT_WORD: Record<FitVerdict, string> = { fits: 'runs comfortably', tight: 'tight — small context', 'wont-run': "won't fit" }
 
 export function ModelPicker(
-  { rows, onSelect }: { rows: ModelRow[]; onSelect: (row: ModelRow) => void },
+  { rows, onSelect, onDelete, onCancel }: {
+    rows: ModelRow[]
+    onSelect: (row: ModelRow) => void
+    onDelete?: (row: ModelRow) => void
+    onCancel?: () => void
+  },
 ): React.ReactElement {
   const selectable = rows.filter(r => r.verdict !== 'wont-run')
   const [idx, setIdx] = useState(() => {
@@ -26,6 +31,8 @@ export function ModelPicker(
   useInput((input, key) => {
     if (key.upArrow) setIdx(i => Math.max(0, i - 1))
     else if (key.downArrow) setIdx(i => Math.min(selectable.length - 1, i + 1))
+    else if (key.escape) onCancel?.()
+    else if ((input === 'd' || input === 'D') && selectable[idx]?.installed) onDelete?.(selectable[idx])
     else if (key.return && selectable[idx]) onSelect(selectable[idx])
   })
 
@@ -56,7 +63,11 @@ export function ModelPicker(
         </Box>
       )}
 
-      <Text dimColor>↑/↓ to move · Enter to select</Text>
+      <Text dimColor>
+        ↑/↓ move · Enter select
+        {onDelete && current?.installed ? ' · d delete' : ''}
+        {onCancel ? ' · Esc back' : ''}
+      </Text>
     </Box>
   )
 }

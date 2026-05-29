@@ -2,17 +2,21 @@ import { describe, it, expect } from 'vitest'
 import { loadCatalog, recommendedFor } from '../src/catalog.js'
 
 describe('catalog', () => {
-  it('loads all models from catalog.json', async () => {
+  it('loads a rich catalog from catalog.json', async () => {
     const cat = await loadCatalog()
-    expect(cat.length).toBeGreaterThanOrEqual(6)
+    expect(cat.length).toBeGreaterThanOrEqual(15)
     expect(cat.find(m => m.id === 'qwen2.5-coder:7b')).toBeTruthy()
+    expect(cat.find(m => m.id === 'qwen3-coder:30b')).toBeTruthy()
+    expect(cat.find(m => m.id === 'granite4:micro-h')).toBeTruthy()
   })
 
-  it('recommends the 1.5B model for the 8GB tier; both 1.5B and 3B are 8GB-eligible', async () => {
+  it('recommends the 3B coder for the 8GB tier; several tiny models are 8GB-eligible', async () => {
     const cat = await loadCatalog()
-    expect(recommendedFor(cat, 8)?.id).toBe('qwen2.5-coder:1.5b')
-    expect(cat.filter(m => m.minTierGB === 8).map(m => m.id).sort())
-      .toEqual(['qwen2.5-coder:1.5b', 'qwen2.5-coder:3b'])
+    expect(recommendedFor(cat, 8)?.id).toBe('qwen2.5-coder:3b')
+    const tiny = cat.filter(m => m.minTierGB === 8).map(m => m.id)
+    expect(tiny).toContain('qwen2.5-coder:1.5b')
+    expect(tiny).toContain('qwen2.5-coder:3b')
+    expect(tiny.length).toBeGreaterThanOrEqual(3)
   })
 
   it('recommends the 7B model for a 16GB machine', async () => {
@@ -20,7 +24,7 @@ describe('catalog', () => {
     expect(recommendedFor(cat, 16)?.id).toBe('qwen2.5-coder:7b')
   })
 
-  it('recommends a 14B/20B class model for a 24GB machine', async () => {
+  it('recommends a 14B-class model for a 24GB machine', async () => {
     const cat = await loadCatalog()
     expect(recommendedFor(cat, 24)?.recommendedForGB).toContain(24)
   })
@@ -29,7 +33,9 @@ describe('catalog', () => {
     const cat = await loadCatalog()
     // 48GB has no exact recommendedForGB entry -> largest model with minTierGB <= 48
     const rec = recommendedFor(cat, 48)
-    expect(rec?.id).toBe('qwen3-coder:30b')
+    expect(rec).toBeTruthy()
+    expect(rec!.minTierGB).toBeLessThanOrEqual(48)
+    expect(rec!.weightsGB).toBe(Math.max(...cat.filter(m => m.minTierGB <= 48).map(m => m.weightsGB)))
   })
 
   it('returns undefined when nothing fits the tier', async () => {

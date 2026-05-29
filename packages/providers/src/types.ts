@@ -42,4 +42,6 @@ export interface Provider {
   chat(req: ChatRequest): AsyncIterable<ChatEvent>
   /** Optional: preload the model into memory so the first real turn is fast. */
   warm?(model: string, keepAlive?: string): Promise<void>
+  /** Optional: delete a downloaded model to free disk space. */
+  remove?(model: string): Promise<void>
 }

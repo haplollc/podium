@@ -7,6 +7,7 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     clear: vi.fn(),
     compact: vi.fn(async () => {}),
     openModelPicker: vi.fn(),
+    openSetup: vi.fn(),
     listModels: vi.fn(async () => ['qwen2.5-coder:7b']),
     pull: vi.fn(async () => {}),
     listSkills: () => ['commit'],
@@ -36,6 +37,11 @@ describe('runSlash', () => {
     const compact = vi.fn(async () => {})
     await runSlash({ name: 'compact', args: '' }, ctx({ compact }))
     expect(compact).toHaveBeenCalled()
+  })
+  it('setup reopens the wizard', async () => {
+    const openSetup = vi.fn()
+    expect(await runSlash({ name: 'setup', args: '' }, ctx({ openSetup }))).toContain('setup')
+    expect(openSetup).toHaveBeenCalled()
   })
   it('model opens the picker', async () => {
     const openModelPicker = vi.fn()

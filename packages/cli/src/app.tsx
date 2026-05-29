@@ -101,6 +101,12 @@ export function App(): React.ReactElement {
 
   function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
 
+  /** Refresh the installed-model set from the backend, then show the setup screen. */
+  async function refreshInstalledThenOpen() {
+    try { setInstalled(new Set((await provider.listLocal()).map(m => m.name))) } catch { /* keep prior */ }
+    setScreen('setup')
+  }
+
   async function onWizardComplete(r: { model: string; contextSize: number }) {
     const next: MaestroConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize, mode: 'default' }
     await saveConfig(next)
@@ -202,7 +208,8 @@ export function App(): React.ReactElement {
       await compact(cmRef.current, { prefixCount: 1, summarize })
       setStats(cmRef.current.stats())
     },
-    openModelPicker: () => setScreen('setup'),
+    openModelPicker: () => { void refreshInstalledThenOpen() },
+    openSetup: () => { void refreshInstalledThenOpen() },
     listModels: async () => (await provider.listLocal()).map(m => m.name),
     pull: async (model) => { await provider.pull(model, () => {}) },
     listSkills: () => registryRef.current.list().map(m => m.name),
@@ -249,11 +256,12 @@ export function App(): React.ReactElement {
       <SetupWizard
         sys={sys} catalog={catalog} installed={installed}
         provider={provider} onComplete={onWizardComplete}
+        onCancel={cfg ? () => setScreen('repl') : undefined}
       />
     )
 
   const commandNames = [
-    'model', 'models', 'pull', 'skills', 'soul', 'plan', 'context', 'compact', 'clear', 'help',
+    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'plan', 'context', 'compact', 'clear', 'help',
     ...registryRef.current.list().map(m => m.name),
   ]
 

@@ -45,6 +45,16 @@ export class OllamaProvider implements Provider {
     } catch { /* best-effort warmup */ }
   }
 
+  /** Delete a downloaded model (frees disk). */
+  async remove(model: string): Promise<void> {
+    const r = await fetch(`${this.base}/api/delete`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model }),
+    })
+    if (!r.ok) throw new Error(`failed to delete ${model} (HTTP ${r.status})`)
+  }
+
   async capabilities(model: string): Promise<ModelCapabilities> {
     const r = await fetch(`${this.base}/api/show`, {
       method: 'POST',

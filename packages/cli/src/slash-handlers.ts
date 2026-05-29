@@ -6,6 +6,7 @@ export interface SlashCtx {
   clear(): void
   compact(): Promise<void>
   openModelPicker(): void
+  openSetup(): void
   listModels(): Promise<string[]>
   pull(model: string): Promise<void>
   listSkills(): string[]
@@ -15,7 +16,7 @@ export interface SlashCtx {
   soul(): string
 }
 
-const HELP = 'Commands: /model · /models · /pull <name> · /skills · /soul · /plan · /context · /compact · /clear · /help · /<skill>'
+const HELP = 'Commands: /setup · /model · /models · /pull <name> · /skills · /soul · /plan · /context · /compact · /clear · /help · /<skill>'
 
 /** Execute a builtin slash command (or a /<skill-name>), returning a transcript line. */
 export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string> {
@@ -32,9 +33,12 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
     case 'compact':
       await ctx.compact()
       return 'Compacted conversation.'
+    case 'setup':
+      ctx.openSetup()
+      return 'Reopening setup…'
     case 'model':
       ctx.openModelPicker()
-      return 'Opening model picker…'
+      return 'Opening model picker (download / delete / switch)…'
     case 'models':
       return `Installed: ${(await ctx.listModels()).join(', ') || '(none)'}`
     case 'pull':
