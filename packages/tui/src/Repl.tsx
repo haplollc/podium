@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import type { ContextStats } from '@podium/core'
 import { ContextMeter } from './ContextMeter.js'
 import { MetricsBar, type MetricsData } from './MetricsBar.js'
+import { Markdown } from './Markdown.js'
 
 export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output'; text: string }
 
@@ -23,6 +24,16 @@ export function Repl(props: {
   const inputRef = useRef('')
   const selRef = useRef(0)
   const lastEscRef = useRef(0)
+  const [elapsed, setElapsed] = useState(0)
+  const busyStartRef = useRef(0)
+
+  useEffect(() => {
+    if (!props.busy) return
+    busyStartRef.current = Date.now()
+    setElapsed(0)
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - busyStartRef.current) / 1000)), 500)
+    return () => clearInterval(id)
+  }, [props.busy])
 
   const commands = props.commands ?? []
 
@@ -80,27 +91,33 @@ export function Repl(props: {
     <Box flexDirection="column">
       {props.transcript.map((e, i) => {
         if (e.role === 'output') {
+          const lines = e.text.split('\n')
           return (
-            <Box key={i} flexDirection="column" marginLeft={4}>
-              {e.text.split('\n').map((line, j) => <Text key={j} dimColor>{line}</Text>)}
+            <Box key={i} flexDirection="column" marginLeft={2}>
+              {lines.map((line, j) => (
+                <Text key={j} dimColor>{j === 0 ? '  ⎿  ' : '     '}{line}</Text>
+              ))}
             </Box>
           )
         }
-        return (
-          <Text key={i} color={e.role === 'user' ? 'cyan' : e.role === 'tool' ? 'gray' : undefined}>
-            {e.role === 'user' ? '› ' : e.role === 'tool' ? '  ⚙ ' : ''}{e.text}
-          </Text>
-        )
+        if (e.role === 'tool') {
+          return <Text key={i}><Text color="green">⏺</Text> {e.text}</Text>
+        }
+        if (e.role === 'assistant') {
+          return <Box key={i} marginTop={1}><Markdown content={e.text} /></Box>
+        }
+        return <Text key={i} color="cyan">› {e.text}</Text>
       })}
 
       {props.busy && props.streaming && !/```|\{\s*"name"\s*:|^\s*[{[]/.test(props.streaming)
-        ? <Text>{props.streaming}<Text color="gray">▍</Text></Text>
+        ? <Box marginTop={1}><Markdown content={props.streaming} /></Box>
         : null}
 
       {props.busy && (
-        <Box marginTop={props.streaming ? 0 : 0}>
+        <Box>
           <Text color="yellow"><Spinner type="dots" /></Text>
           <Text color="yellow"> {props.status ?? 'Thinking…'}</Text>
+          <Text dimColor> ({elapsed}s)</Text>
         </Box>
       )}
 

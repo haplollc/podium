@@ -1,6 +1,6 @@
 {
   "name": "podium-cli",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "A local-model terminal coding agent, optimized for small context windows and modest Macs.",
   "license": "MIT",
   "homepage": "https://github.com/haplollc/podium",

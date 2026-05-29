@@ -57,12 +57,42 @@ function findJsonObjects(s: string): Array<{ raw: string; value: unknown }> {
       const end = matchBrace(s, i)
       if (end > i) {
         const raw = s.slice(i, end + 1)
-        try { out.push({ raw, value: JSON.parse(raw) }) } catch { /* not JSON, skip */ }
+        const value = tolerantParse(raw)
+        if (value !== undefined) out.push({ raw, value })
         i = end + 1
         continue
       }
     }
     i++
+  }
+  return out
+}
+
+/**
+ * Parse a JSON object, tolerating the #1 malformation small models produce:
+ * literal newlines / tabs / carriage-returns inside string values (e.g. a
+ * multi-line file `content` in a Write call). Without this, JSON.parse throws
+ * and the whole tool call (the Write!) is silently dropped.
+ */
+function tolerantParse(raw: string): unknown | undefined {
+  try { return JSON.parse(raw) } catch { /* fall through to repair */ }
+  try { return JSON.parse(escapeRawControlInStrings(raw)) } catch { return undefined }
+}
+
+function escapeRawControlInStrings(s: string): string {
+  let out = ''
+  let inStr = false
+  let esc = false
+  for (const ch of s) {
+    if (esc) { out += ch; esc = false; continue }
+    if (ch === '\\') { out += ch; esc = true; continue }
+    if (ch === '"') { inStr = !inStr; out += ch; continue }
+    if (inStr) {
+      if (ch === '\n') { out += '\\n'; continue }
+      if (ch === '\r') { out += '\\r'; continue }
+      if (ch === '\t') { out += '\\t'; continue }
+    }
+    out += ch
   }
   return out
 }

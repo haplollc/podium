@@ -52,6 +52,24 @@ describe('extractToolCalls', () => {
     expect(r.cleanedText).toBe(text)
   })
 
+  it('recovers a Write whose content has LITERAL newlines (invalid strict JSON)', () => {
+    // Small models often emit multi-line code content with raw newlines, which
+    // strict JSON.parse rejects — the Write must not be dropped.
+    const text = '{"name":"Write","arguments":{"file_path":"todo.py","content":"import json\nprint(1)\n"}}'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].name).toBe('Write')
+    expect(String(calls[0].arguments.content)).toContain('print(1)')
+  })
+
+  it('still extracts the Write when followed by Bash calls (multi-line content)', () => {
+    const text =
+      '{"name":"Write","arguments":{"file_path":"todo.py","content":"def f():\n    return {\\"a\\": 1}\n"}}\n' +
+      '{"name":"Bash","arguments":{"command":"python3 todo.py"}}'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(calls.map(c => c.name)).toEqual(['Write', 'Bash'])
+  })
+
   it('parses multiple tool calls in one message', () => {
     const text = '{"name":"Read","arguments":{"file_path":"a"}} then {"name":"Read","arguments":{"file_path":"b"}}'
     const { calls } = extractToolCalls(text, KNOWN)

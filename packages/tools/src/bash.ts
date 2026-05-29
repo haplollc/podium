@@ -22,6 +22,11 @@ export const bashTool: Tool = {
     })
     if (result.isCanceled) return 'Stopped.'
     const body = result.all ?? `${result.stdout}\n${result.stderr}`
-    return truncateLines(`exit=${result.exitCode}\n${body}`, 200)
+    let out = `exit=${result.exitCode}\n${body}`
+    // Loud, actionable hint when a command runs a file that doesn't exist yet.
+    if (result.exitCode !== 0 && /No such file or directory|can't open file|command not found|exit=127/i.test(out)) {
+      out += '\n\n[hint] That file/command does not exist. If you meant to run a script, CREATE it first with the Write tool (e.g. Write todo.py with the program), THEN run it.'
+    }
+    return truncateLines(out, 200)
   },
 }
