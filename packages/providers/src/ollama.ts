@@ -91,6 +91,7 @@ export class OllamaProvider implements Provider {
         keep_alive: req.keepAlive,
         options: { num_ctx: req.numCtx, temperature: req.temperature ?? 0.2 },
       }),
+      signal: req.signal,
     })
     if (!r.body) throw new Error('no response body from /api/chat')
     for await (const chunk of readNdjson(r.body)) {

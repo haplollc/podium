@@ -18,8 +18,9 @@ export const bashTool: Tool = {
   async run(args, ctx) {
     const result = await execa(String(args.command), {
       shell: true, cwd: ctx.cwd, timeout: Number(args.timeout_ms ?? 120000),
-      reject: false, all: true,
+      reject: false, all: true, cancelSignal: ctx.signal,
     })
+    if (result.isCanceled) return 'Stopped.'
     const body = result.all ?? `${result.stdout}\n${result.stderr}`
     return truncateLines(`exit=${result.exitCode}\n${body}`, 200)
   },

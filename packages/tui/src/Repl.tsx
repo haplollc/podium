@@ -16,11 +16,13 @@ export function Repl(props: {
   status?: string               // spinner label while busy (e.g. "Loading model…")
   commands?: string[]           // command names for /autocomplete
   metrics?: MetricsData         // live dashboard over the input (toggle with /metrics)
+  onAbort?: () => void          // Esc while busy stops the running turn
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
   const inputRef = useRef('')
   const selRef = useRef(0)
+  const lastEscRef = useRef(0)
 
   const commands = props.commands ?? []
 
@@ -40,6 +42,14 @@ export function Repl(props: {
   }
 
   useInput((chunk, key) => {
+    // Esc is handled in every state: stop a running turn, or double-tap to clear input.
+    if (key.escape) {
+      if (props.busy) { props.onAbort?.(); return }
+      const now = Date.now()
+      if (inputRef.current.length > 0 && now - lastEscRef.current < 600) { setBoth(''); setSelBoth(0) }
+      lastEscRef.current = now
+      return
+    }
     if (props.busy) return
     const cur = inputRef.current
     const menu = matchesFor(cur)

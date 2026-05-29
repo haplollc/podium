@@ -11,6 +11,8 @@ export interface ToolContextSkills {
 
 export interface ToolContext {
   cwd: string
+  /** Abort long-running tools (Bash, web) when the user stops the turn. */
+  signal?: AbortSignal
   todos?: TodoStore
   skills?: ToolContextSkills
   /** Launch an isolated-context subagent; returns its concise final report. */

@@ -40,6 +40,8 @@ export interface RunTurnOpts {
   preToolUse?: (call: ToolCall) => Promise<boolean>
   /** Keep the model loaded between turns (e.g. "30m"). */
   keepAlive?: string
+  /** Abort the whole turn (user pressed Esc). */
+  signal?: AbortSignal
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -61,11 +63,12 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
   let finalText = ''
   let modelStarted = false
   for (let step = 0; step < maxSteps; step++) {
+    if (opts.signal?.aborted) break
     if (shouldCompact(cm.stats(), buffer)) {
       await compact(cm, {
         prefixCount: 1,
         summarize: async (prompt) => collectText(provider.chat({
-          model, numCtx: opts.numCtx, keepAlive: opts.keepAlive,
+          model, numCtx: opts.numCtx, keepAlive: opts.keepAlive, signal: opts.signal,
           messages: [{ role: 'user', content: prompt }],
         })),
       })
@@ -74,10 +77,15 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }, ...cm.messages()]
     let text = ''
     const toolCalls: ToolCall[] = []
-    for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx, keepAlive: opts.keepAlive })) {
-      if (!modelStarted) { modelStarted = true; opts.onModelStart?.() }
-      if (ev.type === 'text') { text += ev.delta; opts.onText?.(ev.delta) }
-      else if (ev.type === 'tool_call') toolCalls.push(ev.call)
+    try {
+      for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx, keepAlive: opts.keepAlive, signal: opts.signal })) {
+        if (!modelStarted) { modelStarted = true; opts.onModelStart?.() }
+        if (ev.type === 'text') { text += ev.delta; opts.onText?.(ev.delta) }
+        else if (ev.type === 'tool_call') toolCalls.push(ev.call)
+      }
+    } catch (e) {
+      if (opts.signal?.aborted || (e as Error).name === 'AbortError') break
+      throw e
     }
 
     // Dual-path: prefer native tool_calls; otherwise fall back to parsing a
@@ -132,6 +140,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         result = tool
           ? await tool.run(call.arguments, {
               cwd: opts.cwd ?? process.cwd(),
+              signal: opts.signal,
               todos: opts.todos,
               skills: opts.skills,
               spawnAgent: opts.spawnAgent,

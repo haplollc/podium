@@ -45,6 +45,7 @@ export function App(): React.ReactElement {
   const [streaming, setStreaming] = useState('')  // live assistant text
   const [metricsOn, setMetricsOn] = useState(false)
   const [metricsData, setMetricsData] = useState<MetricsData | null>(null)
+  const [yoloOn, setYoloOn] = useState(false)
 
   const KEEP_ALIVE = '30m'
 
@@ -57,6 +58,8 @@ export function App(): React.ReactElement {
   const hooksRef = useRef<HookConfig>({})
   const genStartRef = useRef<number | null>(null)  // turn start (ms) for tok/s
   const genCharsRef = useRef(0)                     // streamed chars this turn
+  const yoloRef = useRef(false)                     // skip permission prompts
+  const abortRef = useRef<AbortController | null>(null) // cancels the active turn
 
   const todoStore: TodoStore = {
     set: (items) => { todosRef.current = items; setTodos(items) },
@@ -189,6 +192,8 @@ export function App(): React.ReactElement {
     const cm = cmRef.current
     if (!cm || !cfg) return ''
     cm.add({ role: 'user', content: userContent })
+    const controller = new AbortController()
+    abortRef.current = controller
     setBusy(true)
     setStatus('Loading model…')   // until the model emits its first token
     setStreaming('')
@@ -200,7 +205,8 @@ export function App(): React.ReactElement {
         systemPrompt: systemPrompt(),
         numCtx: cfg.contextSize,
         keepAlive: KEEP_ALIVE,
-        mode: (cfg.mode ?? 'default') as PermissionMode,
+        signal: controller.signal,
+        mode: (yoloRef.current ? 'yolo' : (cfg.mode ?? 'default')) as PermissionMode,
         planMode: planRef.current,
         todos: todoStore,
         skills: registryRef.current,
@@ -225,9 +231,11 @@ export function App(): React.ReactElement {
           push({ role: 'output', text: shown })
         },
       })
+      if (controller.signal.aborted) { push({ role: 'output', text: '⏹ Stopped.' }); return '' }
       if (showAssistant && reply) push({ role: 'assistant', text: reply })
       return reply
     } finally {
+      abortRef.current = null
       genStartRef.current = null
       setStreaming('')
       setStatus('')
@@ -235,6 +243,8 @@ export function App(): React.ReactElement {
       setBusy(false)
     }
   }
+
+  function abortTurn() { abortRef.current?.abort() }
 
   const slashCtx: SlashCtx = {
     stats: () => cmRef.current?.stats() ?? stats,
@@ -268,6 +278,7 @@ export function App(): React.ReactElement {
     },
     soul: () => soulRef.current,
     toggleMetrics: () => { const next = !metricsOn; setMetricsOn(next); return next },
+    toggleYolo: () => { yoloRef.current = !yoloRef.current; setYoloOn(yoloRef.current); return yoloRef.current },
   }
 
   async function onSubmit(text: string) {
@@ -304,7 +315,7 @@ export function App(): React.ReactElement {
     )
 
   const commandNames = [
-    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'context', 'compact', 'clear', 'help',
+    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'yolo', 'context', 'compact', 'clear', 'help',
     ...registryRef.current.list().map(m => m.name),
   ]
 
@@ -312,6 +323,7 @@ export function App(): React.ReactElement {
     <Box flexDirection="column">
       <Banner model={cfg?.model ?? 'no model'} cwd={process.cwd()} />
       {planMode && <Text color="magenta">— PLAN MODE (read-only) —</Text>}
+      {yoloOn && <Text color="red">⚠ YOLO — skipping all permission prompts</Text>}
       {todos.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
           {todos.map((t, i) => (
@@ -325,6 +337,7 @@ export function App(): React.ReactElement {
         stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy}
         streaming={streaming} status={status} commands={commandNames}
         metrics={metricsOn ? (metricsData ?? undefined) : undefined}
+        onAbort={abortTurn}
       />
       {pending && (
         <PermissionPrompt

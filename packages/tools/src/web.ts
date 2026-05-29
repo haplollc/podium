@@ -11,12 +11,13 @@ export function isOffline(e: unknown): boolean {
   return /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ENETUNREACH|ENETDOWN|EHOSTUNREACH|fetch failed/i.test(blob)
 }
 
-async function fetchWithTimeout(url: string, ms: number, browser = false): Promise<Response> {
+async function fetchWithTimeout(url: string, ms: number, browser = false, extern?: AbortSignal): Promise<Response> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), ms)
+  const signal = extern ? AbortSignal.any([ctrl.signal, extern]) : ctrl.signal
   try {
     return await fetch(url, {
-      signal: ctrl.signal,
+      signal,
       headers: browser
         ? { 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36', accept: 'text/html' }
         : { 'user-agent': 'podium-cli', accept: 'text/html,*/*' },
@@ -80,10 +81,10 @@ export const webSearchTool: Tool = {
       required: ['query'],
     },
   },
-  async run(args) {
+  async run(args, ctx) {
     const query = String(args.query)
     try {
-      const res = await fetchWithTimeout(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, 15000, true)
+      const res = await fetchWithTimeout(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, 15000, true, ctx.signal)
       if (!res.ok) return `Error: search returned HTTP ${res.status}`
       const results = parseDuckDuckGo(await res.text()).slice(0, 5)
       if (!results.length) return `No results for "${query}".`
@@ -109,11 +110,11 @@ export const webFetchTool: Tool = {
       required: ['url'],
     },
   },
-  async run(args) {
+  async run(args, ctx) {
     let url = String(args.url)
     if (!/^https?:\/\//i.test(url)) url = `https://${url}`
     try {
-      const res = await fetchWithTimeout(url, 15000)
+      const res = await fetchWithTimeout(url, 15000, false, ctx.signal)
       if (!res.ok) return `Error: ${url} returned HTTP ${res.status}`
       const ctype = res.headers.get('content-type') ?? ''
       const body = await res.text()

@@ -16,6 +16,7 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     togglePlan: vi.fn(() => true),
     soul: () => 'be kind and concise',
     toggleMetrics: vi.fn(() => true),
+    toggleYolo: vi.fn(() => true),
     ...over,
   }
 }
@@ -81,6 +82,11 @@ describe('runSlash', () => {
     const toggleMetrics = vi.fn(() => true)
     expect(await runSlash({ name: 'metrics', args: '' }, ctx({ toggleMetrics }))).toContain('ON')
     expect(toggleMetrics).toHaveBeenCalled()
+  })
+  it('yolo toggles permission-skipping', async () => {
+    const toggleYolo = vi.fn(() => true)
+    expect(await runSlash({ name: 'yolo', args: '' }, ctx({ toggleYolo }))).toContain('YOLO ON')
+    expect(toggleYolo).toHaveBeenCalled()
   })
   it('unknown command (not a skill) is reported', async () => {
     expect(await runSlash({ name: 'wat', args: '' }, ctx())).toContain('Unknown command')

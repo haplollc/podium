@@ -25,6 +25,8 @@ export interface ChatRequest {
   temperature?: number
   /** How long the backend should keep the model loaded (e.g. "30m"). */
   keepAlive?: string
+  /** Abort the request mid-stream (e.g. user pressed Esc). */
+  signal?: AbortSignal
 }
 
 export type ChatEvent =

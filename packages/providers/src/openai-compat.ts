@@ -54,6 +54,7 @@ export class OpenAICompatProvider implements Provider {
         temperature: req.temperature ?? 0.2,
         stream: true,
       }),
+      signal: req.signal,
     })
     if (!r.body) throw new Error('no response body from /chat/completions')
 

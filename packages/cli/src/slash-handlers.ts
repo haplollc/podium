@@ -15,9 +15,10 @@ export interface SlashCtx {
   togglePlan(): boolean
   soul(): string
   toggleMetrics(): boolean
+  toggleYolo(): boolean
 }
 
-const HELP = 'Commands: /setup · /model · /models · /pull <name> · /skills · /soul · /metrics · /plan · /context · /compact · /clear · /help · /<skill>'
+const HELP = 'Commands: /setup · /model · /models · /pull <name> · /skills · /soul · /metrics · /plan · /yolo · /context · /compact · /clear · /help · /<skill>'
 
 /** Execute a builtin slash command (or a /<skill-name>), returning a transcript line. */
 export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string> {
@@ -54,6 +55,10 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
       return `Podium's soul (create SOUL.md to customize):\n${ctx.soul()}`
     case 'metrics':
       return `Metrics dashboard ${ctx.toggleMetrics() ? 'ON' : 'OFF'}.`
+    case 'yolo':
+      return ctx.toggleYolo()
+        ? '⚠ YOLO ON — skipping ALL permission prompts. Tools run without asking. /yolo again to turn off.'
+        : 'YOLO OFF — permission prompts restored.'
     default:
       if (ctx.hasSkill(cmd.name)) return ctx.runSkill(cmd.name, cmd.args)
       return `Unknown command: /${cmd.name}. Try /help`
