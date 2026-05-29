@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { extractToolCalls, cleanModelText } from '../src/tool-parse.js'
+import { extractToolCalls, cleanModelText, stripSpecialTokens } from '../src/tool-parse.js'
 
 const KNOWN = ['Write', 'Read', 'Bash']
+
+describe('stripSpecialTokens', () => {
+  it('removes leaked chat-template tokens', () => {
+    expect(stripSpecialTokens('hello <|im_start|>assistant world <|im_end|>')).toBe('hello assistant world ')
+    expect(stripSpecialTokens('done<|eot_id|>')).toBe('done')
+  })
+})
 
 describe('cleanModelText', () => {
   it('strips empty/leftover code fences and trims', () => {

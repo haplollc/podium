@@ -29,5 +29,5 @@ export function mergeSkills(discovered: SkillMeta[], builtins: SkillMeta[]): Ski
 export function buildSkillListing(metas: SkillMeta[]): string {
   if (!metas.length) return ''
   const lines = metas.map(m => `- ${m.name}: ${m.description}`)
-  return `Available skills (invoke with the Skill tool or /<name>):\n${lines.join('\n')}`
+  return `Optional skills — ONLY use the Skill tool when the user's request clearly matches one (or they type /<name>). For normal questions and coding, just answer or use Read/Write/Edit/Bash. Do NOT invoke a skill otherwise.\n${lines.join('\n')}`
 }

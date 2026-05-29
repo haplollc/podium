@@ -24,9 +24,14 @@ export async function discoverSkills(roots: string[]): Promise<SkillMeta[]> {
 }
 
 export function defaultSkillRoots(home: string, cwd: string): string[] {
-  return [
+  // Only Podium's own skill dirs. We intentionally do NOT auto-load
+  // ~/.claude/skills: those are often unrelated Claude Code skills that pollute
+  // the prompt and cause small models to fire a random irrelevant skill. Opt in
+  // with PODIUM_CLAUDE_SKILLS=1 if you really want them.
+  const roots = [
     path.join(cwd, '.podium', 'skills'),
     path.join(home, '.podium', 'skills'),
-    path.join(home, '.claude', 'skills'), // Claude Code compatibility
   ]
+  if (process.env.PODIUM_CLAUDE_SKILLS === '1') roots.push(path.join(home, '.claude', 'skills'))
+  return roots
 }

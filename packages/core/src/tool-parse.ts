@@ -37,11 +37,22 @@ export function extractToolCalls(text: string, knownNames: string[]): ParsedTool
  * ```json ``` wrappers small models leave behind after a tool call) and trim.
  */
 export function cleanModelText(text: string): string {
-  return text
+  return stripSpecialTokens(text)
     .replace(/```[a-zA-Z]*[ \t]*\n?[ \t]*```/g, '') // empty fenced blocks
     .replace(/^[ \t]*```[a-zA-Z]*[ \t]*$/gm, '')     // orphan fence lines
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+/**
+ * Strip chat-template control tokens that some models leak into their output
+ * (Qwen <|im_start|>/<|im_end|>, Llama <|eot_id|>, ChatML, etc.). Left in, they
+ * clutter the UI and can derail the model on the next turn.
+ */
+export function stripSpecialTokens(text: string): string {
+  return text
+    .replace(/<\|[^|>]*\|>/g, '')          // <|im_start|>, <|im_end|>, <|eot_id|>, …
+    .replace(/<\/?(s|assistant|user|system)>/gi, '') // stray role/BOS tags
 }
 
 function stripFences(s: string): string {

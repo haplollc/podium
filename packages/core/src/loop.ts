@@ -2,7 +2,7 @@ import type { Provider, ChatMessage, ToolCall } from '@podium/providers'
 import type { Tool, TodoStore, ToolContextSkills } from '@podium/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
-import { extractToolCalls, cleanModelText } from './tool-parse.js'
+import { extractToolCalls, cleanModelText, stripSpecialTokens } from './tool-parse.js'
 import { decide, type PermissionMode } from './permission.js'
 
 export interface RunTurnOpts {
@@ -106,6 +106,9 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
       if (opts.signal?.aborted || (e as Error).name === 'AbortError') break
       throw e
     }
+
+    // Strip leaked chat-template tokens (<|im_start|> etc.) before they enter history.
+    text = stripSpecialTokens(text)
 
     // Dual-path: prefer native tool_calls; otherwise fall back to parsing a
     // tool call the model emitted as plain-text JSON (common with small models).
