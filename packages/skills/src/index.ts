@@ -1,4 +1,5 @@
 export { parseSkill, interpolateArgs } from './parse.js'
 export { discoverSkills, defaultSkillRoots } from './discover.js'
-export { SkillRegistry, buildSkillListing } from './registry.js'
+export { SkillRegistry, buildSkillListing, mergeSkills } from './registry.js'
+export { builtinSkills } from './builtins.js'
 export type { SkillFrontmatter, ParsedSkill, SkillMeta } from './types.js'

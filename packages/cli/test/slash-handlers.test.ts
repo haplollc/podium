@@ -13,6 +13,7 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     hasSkill: (n) => n === 'commit',
     runSkill: vi.fn(async (n, a) => `running ${n} ${a}`),
     togglePlan: vi.fn(() => true),
+    soul: () => 'be kind and concise',
     ...over,
   }
 }
@@ -65,6 +66,9 @@ describe('runSlash', () => {
     const out = await runSlash({ name: 'commit', args: '-m hi' }, ctx({ runSkill }))
     expect(runSkill).toHaveBeenCalledWith('commit', '-m hi')
     expect(out).toBe('commit body')
+  })
+  it('soul shows the active personality', async () => {
+    expect(await runSlash({ name: 'soul', args: '' }, ctx())).toContain('be kind and concise')
   })
   it('unknown command (not a skill) is reported', async () => {
     expect(await runSlash({ name: 'wat', args: '' }, ctx())).toContain('Unknown command')

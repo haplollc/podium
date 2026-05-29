@@ -13,9 +13,16 @@ export class SkillRegistry {
   async getBody(name: string, args = ''): Promise<string | null> {
     const meta = this.metas.find(m => m.name === name)
     if (!meta) return null
-    const parsed = parseSkill(await readFile(meta.path, 'utf8'))
-    return interpolateArgs(parsed.body, args)
+    // Inline (built-in) skills carry their body; file-backed ones are read on demand.
+    const body = meta.body !== undefined ? meta.body : parseSkill(await readFile(meta.path!, 'utf8')).body
+    return interpolateArgs(body, args)
   }
+}
+
+/** Merge discovered (file) skills over built-ins — a user's SKILL.md wins by name. */
+export function mergeSkills(discovered: SkillMeta[], builtins: SkillMeta[]): SkillMeta[] {
+  const names = new Set(discovered.map(m => m.name))
+  return [...discovered, ...builtins.filter(b => !names.has(b.name))]
 }
 
 /** Compact name+description listing for the system prompt (progressive disclosure). */

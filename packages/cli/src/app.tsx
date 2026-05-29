@@ -9,12 +9,15 @@ import {
   type ContextStats, type PermissionMode,
 } from '@maestro/core'
 import { allTools, baseTools, type TodoItem, type TodoStore } from '@maestro/tools'
-import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing } from '@maestro/skills'
+import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing, mergeSkills, builtinSkills } from '@maestro/skills'
 import { SetupWizard, Repl, PermissionPrompt, Banner, type TranscriptEntry } from '@maestro/tui'
 import { loadConfig, saveConfig, type MaestroConfig } from './config.js'
 import { loadMemory } from './memory.js'
+import { loadSoul, DEFAULT_SOUL } from './soul.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
 import { loadHooks, runHooks, type HookConfig } from './hooks.js'
+
+const THINKING_VERBS = ['Thinking…', 'Pondering…', 'Cooking…', 'Noodling…', 'Composing…', 'Tinkering…']
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -47,9 +50,11 @@ export function App(): React.ReactElement {
   const cmRef = useRef<ContextManager | null>(null)
   const todosRef = useRef<TodoItem[]>([])
   const planRef = useRef(false)
-  const registryRef = useRef<SkillRegistry>(new SkillRegistry([]))
+  const registryRef = useRef<SkillRegistry>(new SkillRegistry(builtinSkills))
   const memoryRef = useRef('')
+  const soulRef = useRef(DEFAULT_SOUL)
   const hooksRef = useRef<HookConfig>({})
+  const verbRef = useRef(0)
 
   const todoStore: TodoStore = {
     set: (items) => { todosRef.current = items; setTodos(items) },
@@ -58,15 +63,17 @@ export function App(): React.ReactElement {
 
   useEffect(() => {
     void (async () => {
-      const [s, c, health, existing, skillMetas, mem, hooks] = await Promise.all([
+      const [s, c, health, existing, skillMetas, mem, soul, hooks] = await Promise.all([
         computeSystemInfo(), loadCatalog(), provider.health(), loadConfig(),
         discoverSkills(defaultSkillRoots(os.homedir(), process.cwd())),
         loadMemory(process.cwd(), os.homedir()),
+        loadSoul(process.cwd(), os.homedir()),
         loadHooks(),
       ])
       setSys(s); setCatalog(c); setCfg(existing)
-      registryRef.current = new SkillRegistry(skillMetas)
+      registryRef.current = new SkillRegistry(mergeSkills(skillMetas, builtinSkills))
       memoryRef.current = mem
+      soulRef.current = soul
       hooksRef.current = hooks
       void runHooks(hooks, 'SessionStart', { cwd: process.cwd() })
       if (health.running) setInstalled(new Set((await provider.listLocal()).map(m => m.name)))
@@ -115,6 +122,7 @@ export function App(): React.ReactElement {
       toolNames: allTools.map(t => t.schema.name),
       memory: memoryRef.current || undefined,
       skillListing: buildSkillListing(registryRef.current.list()) || undefined,
+      soul: soulRef.current || undefined,
       planMode: planRef.current,
     })
   }
@@ -160,7 +168,7 @@ export function App(): React.ReactElement {
         skills: registryRef.current,
         spawnAgent,
         exitPlan,
-        onModelStart: () => setStatus('Thinking…'),
+        onModelStart: () => { verbRef.current = (verbRef.current + 1) % THINKING_VERBS.length; setStatus(THINKING_VERBS[verbRef.current]) },
         onText: (delta) => setStreaming(s => s + delta),
         onPermissionAsk: askPermission,
         preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
@@ -209,6 +217,7 @@ export function App(): React.ReactElement {
       setPlanMode(planRef.current)
       return planRef.current
     },
+    soul: () => soulRef.current,
   }
 
   async function onSubmit(text: string) {
@@ -244,7 +253,7 @@ export function App(): React.ReactElement {
     )
 
   const commandNames = [
-    'model', 'models', 'pull', 'skills', 'plan', 'context', 'compact', 'clear', 'help',
+    'model', 'models', 'pull', 'skills', 'soul', 'plan', 'context', 'compact', 'clear', 'help',
     ...registryRef.current.list().map(m => m.name),
   ]
 

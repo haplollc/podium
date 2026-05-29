@@ -12,9 +12,10 @@ export interface SlashCtx {
   hasSkill(name: string): boolean
   runSkill(name: string, args: string): Promise<string>
   togglePlan(): boolean
+  soul(): string
 }
 
-const HELP = 'Commands: /model · /models · /pull <name> · /skills · /plan · /context · /compact · /clear · /help · /<skill>'
+const HELP = 'Commands: /model · /models · /pull <name> · /skills · /soul · /plan · /context · /compact · /clear · /help · /<skill>'
 
 /** Execute a builtin slash command (or a /<skill-name>), returning a transcript line. */
 export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string> {
@@ -44,6 +45,8 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
       return `Skills: ${ctx.listSkills().join(', ') || '(none)'}`
     case 'plan':
       return `Plan mode ${ctx.togglePlan() ? 'ON — read-only until you /plan again' : 'OFF'}.`
+    case 'soul':
+      return `Maestro's soul (create SOUL.md to customize):\n${ctx.soul()}`
     default:
       if (ctx.hasSkill(cmd.name)) return ctx.runSkill(cmd.name, cmd.args)
       return `Unknown command: /${cmd.name}. Try /help`
