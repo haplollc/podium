@@ -18,6 +18,14 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('Read, Write, Bash')
   })
 
+  it('tells the model it HAS web access when WebSearch is available', () => {
+    const withWeb = buildSystemPrompt({ cwd: '/p', os: 'darwin', toolNames: ['Read', 'WebSearch', 'WebFetch'] })
+    expect(withWeb.toLowerCase()).toContain('internet access')
+    expect(withWeb).toContain('WebSearch')
+    const withoutWeb = buildSystemPrompt({ cwd: '/p', os: 'darwin', toolNames: ['Read', 'Bash'] })
+    expect(withoutWeb.toLowerCase()).not.toContain('internet access')
+  })
+
   it('includes optional memory, skill listing, and plan-mode sections', () => {
     const p = buildSystemPrompt({
       cwd: '/p', os: 'darwin', toolNames: ['Read'],

@@ -10,6 +10,26 @@ function clip(s: unknown, n: number): string {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t
 }
 
+/** Present-tense status line describing what the agent is doing right now. */
+export function toolActivity(call: ToolCall): string {
+  const a = call.arguments ?? {}
+  switch (call.name) {
+    case 'Read': return `Reading ${base(a.file_path)}`
+    case 'Write': return `Writing ${base(a.file_path)}`
+    case 'Edit': return `Editing ${base(a.file_path)}`
+    case 'Bash': return `Running ${clip(a.command, 40)}`
+    case 'Grep': return `Searching the code`
+    case 'Glob': return `Finding files`
+    case 'WebSearch': return `Searching the web for ${clip(a.query, 36)}`
+    case 'WebFetch': return `Reading ${clip(a.url, 40)}`
+    case 'TodoWrite': return `Updating the to-do list`
+    case 'Task': return `Delegating to a subagent`
+    case 'Skill': return `Running the ${clip(a.name, 24)} skill`
+    case 'ExitPlanMode': return `Finalizing the plan`
+    default: return `Using ${call.name}`
+  }
+}
+
 /** Human-friendly one-line label for a tool call (no raw JSON / file contents). */
 export function toolLabel(call: ToolCall): string {
   const a = call.arguments ?? {}

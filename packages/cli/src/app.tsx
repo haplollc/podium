@@ -16,9 +16,7 @@ import { loadMemory } from './memory.js'
 import { loadSoul, DEFAULT_SOUL } from './soul.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
 import { loadHooks, runHooks, type HookConfig } from './hooks.js'
-import { toolLabel } from './tool-label.js'
-
-const THINKING_VERBS = ['Thinking…', 'Pondering…', 'Cooking…', 'Noodling…', 'Composing…', 'Tinkering…']
+import { toolLabel, toolActivity } from './tool-label.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -57,7 +55,6 @@ export function App(): React.ReactElement {
   const memoryRef = useRef('')
   const soulRef = useRef(DEFAULT_SOUL)
   const hooksRef = useRef<HookConfig>({})
-  const verbRef = useRef(0)
   const genStartRef = useRef<number | null>(null)  // turn start (ms) for tok/s
   const genCharsRef = useRef(0)                     // streamed chars this turn
 
@@ -209,13 +206,13 @@ export function App(): React.ReactElement {
         skills: registryRef.current,
         spawnAgent,
         exitPlan,
-        onModelStart: () => { verbRef.current = (verbRef.current + 1) % THINKING_VERBS.length; setStatus(THINKING_VERBS[verbRef.current]) },
+        onModelStart: () => setStatus('Thinking…'),
         onText: (delta) => { genCharsRef.current += delta.length; setStreaming(s => s + delta) },
         onPermissionAsk: askPermission,
         preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
         onToolStart: (call) => {
           setStreaming('')                       // tool starting; drop the pre-tool preview
-          setStatus(`${call.name}…`)
+          setStatus(`${toolActivity(call)}…`)
           push({ role: 'tool', text: toolLabel(call) })
         },
         onToolResult: (_call, result) => {

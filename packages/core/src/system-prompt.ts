@@ -18,6 +18,11 @@ export function buildSystemPrompt(ctx: SystemPromptCtx): string {
     `Call tools when you need to act. When the task is done, reply with a short result — no tool call.`,
     `Available tools: ${ctx.toolNames.join(', ')}.`,
   ]
+  if (ctx.toolNames.includes('WebSearch')) {
+    sections.push(
+      `IMPORTANT: You DO have internet access through tools. To look anything up, call WebSearch (and WebFetch to read a page). NEVER say you cannot access the internet or browse the web — instead, call WebSearch. The tool itself reports if the machine is actually offline.`,
+    )
+  }
   if (ctx.planMode) {
     sections.push(`PLAN MODE: do NOT modify files or run mutating commands. Investigate, then produce a plan and call ExitPlanMode with it for approval.`)
   }

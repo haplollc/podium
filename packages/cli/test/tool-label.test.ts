@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toolLabel } from '../src/tool-label.js'
+import { toolLabel, toolActivity } from '../src/tool-label.js'
 
 const call = (name: string, args: Record<string, unknown>) => ({ id: '1', name, arguments: args })
 
@@ -22,5 +22,14 @@ describe('toolLabel', () => {
   it('never contains raw JSON braces', () => {
     const label = toolLabel(call('Write', { file_path: 'x.py', content: '{"a":1}' }))
     expect(label).not.toContain('{')
+  })
+})
+
+describe('toolActivity', () => {
+  it('describes the current action in present tense', () => {
+    expect(toolActivity(call('Bash', { command: 'python3 chart.py' }))).toBe('Running python3 chart.py')
+    expect(toolActivity(call('Write', { file_path: '/a/chart.py' }))).toBe('Writing chart.py')
+    expect(toolActivity(call('WebSearch', { query: 'qwen3 coder' }))).toContain('Searching the web')
+    expect(toolActivity(call('Read', { file_path: '/a/b/foo.ts' }))).toBe('Reading foo.ts')
   })
 })
