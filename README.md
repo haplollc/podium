@@ -21,8 +21,8 @@ tuned for **small context windows** and **modest Macs**.
 ```
 ╭──────────────────────────────────────────────────────────────╮
 │ ✦ Podium  ·  local-model coding agent                        │
-│ qwen2.5-coder:14b  ·  ~/projects/acme-api                     │
-│ type / for commands · /help for the list                      │
+│ qwen2.5-coder:14b  ·  ~/projects/acme-api                    │
+│ type / for commands · /help for the list                     │
 ╰──────────────────────────────────────────────────────────────╯
 › refactor the auth middleware to use async/await
   ⚙ Read(src/middleware/auth.js)
@@ -98,13 +98,13 @@ your pick with a progress bar, and drops you into a REPL with a live context met
 ```
 ╭──────────────────────────────────────────────────────────────╮
 │ ✦ Podium setup  ·  pick, download, or delete a model         │
-│ Machine  Apple M2 · 24 GB RAM  (≈16.8 GB usable for a model)  │
-│ Backend  Ollama ✓   ·   runs 100% on your machine             │
-│ 🟢 runs comfortably   🟡 tight   (8 too big for this Mac)     │
-│   🟢 Qwen2.5-Coder 7B     4.7 GB · ✓ installed                │
-│ ❯ 🟢 Qwen2.5-Coder 14B      9 GB ★ recommended · ✓ installed  │
-│   🟡 gpt-oss 20B           14 GB · ⤓ download                 │
-│   🔴 Qwen3-Coder 30B       19 GB · ⤓ download                 │
+│ Machine  Apple M2 · 24 GB RAM  (≈16.8 GB usable for a model) │
+│ Backend  Ollama ✓       runs 100% on your machine            │
+│ 🟢 runs comfortably      tight   (8 too big for this Mac)    │
+│ 🟢 Qwen2.5-Coder 7B       4.7 GB · ✓ installed               │
+│ ❯ 🟢 Qwen2.5-Coder 14B      9 GB ★ recommended · ✓ installed │
+│ 🟡 gpt-oss 20B             14 GB · ⤓ download                │
+│ 🔴 Qwen3-Coder 30B         19 GB · ⤓ download                │
 ╰──────────────────────────────────────────────────────────────╯
 ```
 
