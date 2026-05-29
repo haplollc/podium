@@ -72,7 +72,7 @@ export function Repl(props: {
         </Text>
       ))}
 
-      {props.busy && props.streaming
+      {props.busy && props.streaming && !/^\s*[{[]/.test(props.streaming)
         ? <Text>{props.streaming}<Text color="gray">▍</Text></Text>
         : null}
 

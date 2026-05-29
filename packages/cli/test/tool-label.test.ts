@@ -1,0 +1,26 @@
+import { describe, it, expect } from 'vitest'
+import { toolLabel } from '../src/tool-label.js'
+
+const call = (name: string, args: Record<string, unknown>) => ({ id: '1', name, arguments: args })
+
+describe('toolLabel', () => {
+  it('shows Bash command, not JSON', () => {
+    expect(toolLabel(call('Bash', { command: 'python3 chart.py' }))).toBe('Bash › python3 chart.py')
+  })
+  it('shows only the basename for file tools (not the content)', () => {
+    expect(toolLabel(call('Write', { file_path: '/Users/x/chart.py', content: 'huge\nblob\nof\ncode' })))
+      .toBe('Write › chart.py')
+    expect(toolLabel(call('Read', { file_path: '/a/b/foo.ts' }))).toBe('Read › foo.ts')
+    expect(toolLabel(call('Edit', { file_path: '/a/b/foo.ts' }))).toBe('Edit › foo.ts')
+  })
+  it('summarizes search/fetch/todo/grep', () => {
+    expect(toolLabel(call('WebSearch', { query: 'newest qwen coder' }))).toBe('WebSearch › newest qwen coder')
+    expect(toolLabel(call('WebFetch', { url: 'https://ollama.com' }))).toBe('WebFetch › https://ollama.com')
+    expect(toolLabel(call('TodoWrite', { todos: [1, 2, 3] }))).toBe('TodoWrite › 3 items')
+    expect(toolLabel(call('Grep', { pattern: 'needle', glob: '*.ts' }))).toBe('Grep › needle in *.ts')
+  })
+  it('never contains raw JSON braces', () => {
+    const label = toolLabel(call('Write', { file_path: 'x.py', content: '{"a":1}' }))
+    expect(label).not.toContain('{')
+  })
+})

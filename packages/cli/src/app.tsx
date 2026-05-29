@@ -16,6 +16,7 @@ import { loadMemory } from './memory.js'
 import { loadSoul, DEFAULT_SOUL } from './soul.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
 import { loadHooks, runHooks, type HookConfig } from './hooks.js'
+import { toolLabel } from './tool-label.js'
 
 const THINKING_VERBS = ['Thinking…', 'Pondering…', 'Cooking…', 'Noodling…', 'Composing…', 'Tinkering…']
 
@@ -181,7 +182,7 @@ export function App(): React.ReactElement {
         onToolStart: (call) => {
           setStreaming('')                       // tool starting; drop the pre-tool preview
           setStatus(`${call.name}…`)
-          push({ role: 'tool', text: `${call.name}(${JSON.stringify(call.arguments)})` })
+          push({ role: 'tool', text: toolLabel(call) })
         },
       })
       if (showAssistant && reply) push({ role: 'assistant', text: reply })
