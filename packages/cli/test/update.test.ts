@@ -10,6 +10,10 @@ describe('detectInstall', () => {
   it('detects an npm global install', () => {
     expect(detectInstall('/usr/lib/node_modules/podium-cli/bin/podium.js')).toBe('npm')
   })
+  it('detects an npm global under Homebrew node as npm, NOT brew', () => {
+    // The bug: this path has /opt/homebrew/ but it's an npm global, not a brew keg.
+    expect(detectInstall('/opt/homebrew/lib/node_modules/podium-cli/dist/index.js')).toBe('npm')
+  })
   it('falls back to unknown', () => {
     expect(detectInstall('/Users/me/dev/podium/packages/cli/bin/podium.js')).toBe('unknown')
   })
