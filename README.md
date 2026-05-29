@@ -61,6 +61,9 @@ tight. Podium is built around that constraint:
 
 ## Install
 
+**Available now** on [npm](https://www.npmjs.com/package/podium-cli) and via the
+[Haplo Homebrew tap](https://github.com/haplollc/homebrew-tap):
+
 ```bash
 # npm
 npm install -g podium-cli
