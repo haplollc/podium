@@ -17,6 +17,7 @@ import { loadSoul, DEFAULT_SOUL } from './soul.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
 import { loadHooks, runHooks, type HookConfig } from './hooks.js'
 import { toolLabel, toolActivity } from './tool-label.js'
+import { ensureOllama, type EnsureResult } from './backend.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -31,6 +32,8 @@ interface PendingPermission { call: ToolCall; resolve: (ok: boolean) => void }
 export function App(): React.ReactElement {
   const provider = new OllamaProvider()
   const [screen, setScreen] = useState<StartScreen | 'loading'>('loading')
+  const [bootStatus, setBootStatus] = useState('Starting Podium…')
+  const [backendReason, setBackendReason] = useState<EnsureResult['reason']>(undefined)
   const [sys, setSys] = useState<SystemInfo | null>(null)
   const [catalog, setCatalog] = useState<CatalogModel[]>([])
   const [installed, setInstalled] = useState<Set<string>>(new Set())
@@ -68,8 +71,8 @@ export function App(): React.ReactElement {
 
   useEffect(() => {
     void (async () => {
-      const [s, c, health, existing, skillMetas, mem, soul, hooks] = await Promise.all([
-        computeSystemInfo(), loadCatalog(), provider.health(), loadConfig(),
+      const [s, c, existing, skillMetas, mem, soul, hooks] = await Promise.all([
+        computeSystemInfo(), loadCatalog(), loadConfig(),
         discoverSkills(defaultSkillRoots(os.homedir(), process.cwd())),
         loadMemory(process.cwd(), os.homedir()),
         loadSoul(process.cwd(), os.homedir()),
@@ -81,8 +84,13 @@ export function App(): React.ReactElement {
       soulRef.current = soul
       hooksRef.current = hooks
       void runHooks(hooks, 'SessionStart', { cwd: process.cwd() })
-      if (health.running) setInstalled(new Set((await provider.listLocal()).map(m => m.name)))
-      const decided = decideStartScreen(existing, health)
+
+      // One-command onboarding: make sure the backend is up (install/start Ollama if needed).
+      const ensured = await ensureOllama(provider, setBootStatus)
+      setBackendReason(ensured.reason)
+      if (ensured.running) setInstalled(new Set((await provider.listLocal()).map(m => m.name)))
+
+      const decided = decideStartScreen(existing, { running: ensured.running })
       if (decided === 'repl' && existing) { initRepl(existing); void warmModel(existing.model) }
       setScreen(decided)
     })()
@@ -297,14 +305,17 @@ export function App(): React.ReactElement {
     await runAgentTurn(text, true)
   }
 
-  if (screen === 'loading' || !sys) return <Text>Starting Podium…</Text>
+  if (screen === 'loading' || !sys) return <Text color="yellow">✦ {bootStatus}</Text>
   if (screen === 'backend-error')
     return (
       <Box flexDirection="column">
-        <Text color="red">No local-model backend detected (Ollama).</Text>
-        <Text>Install:  brew install ollama</Text>
-        <Text>Start:    ollama serve</Text>
-        <Text dimColor>Then relaunch podium.</Text>
+        <Text color="red">Couldn't start a local-model backend (Ollama).</Text>
+        {backendReason === 'ollama-missing'
+          ? <><Text>Install Homebrew (brew.sh), then re-run podium — it will install Ollama for you.</Text>
+              <Text dimColor>Or: install Ollama from https://ollama.com and re-run podium.</Text></>
+          : <><Text>Ollama is installed but wouldn't start. Try it manually:</Text>
+              <Text>  ollama serve</Text>
+              <Text dimColor>then re-run podium.</Text></>}
       </Box>
     )
   if (screen === 'setup')
