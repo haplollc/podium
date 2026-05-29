@@ -53,7 +53,7 @@ describe('shell tools', () => {
 
   it('allTools includes the core file/shell tools and toolByName resolves them', () => {
     const names = allTools.map(t => t.schema.name)
-    for (const n of ['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'TodoWrite', 'Write']) {
+    for (const n of ['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'TodoWrite', 'Write', 'WebSearch', 'WebFetch']) {
       expect(names).toContain(n)
     }
     expect(toolByName('Edit')?.schema.name).toBe('Edit')

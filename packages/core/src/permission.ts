@@ -1,7 +1,7 @@
 export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'yolo'
 export type PermissionDecision = 'allow' | 'ask' | 'deny'
 
-const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'TodoWrite'])
+const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'TodoWrite', 'WebSearch', 'WebFetch'])
 const EDIT_TOOLS = new Set(['Write', 'Edit'])
 
 /** Decide how a tool invocation should be handled under a permission mode. */

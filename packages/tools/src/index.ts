@@ -11,6 +11,7 @@ import { todoTool } from './todo.js'
 import { skillTool } from './skill.js'
 import { taskTool } from './task.js'
 import { exitPlanTool } from './exit-plan.js'
+import { webSearchTool, webFetchTool } from './web.js'
 import type { Tool } from './types.js'
 
 export { readTool } from './read.js'
@@ -23,9 +24,12 @@ export { todoTool } from './todo.js'
 export { skillTool } from './skill.js'
 export { taskTool } from './task.js'
 export { exitPlanTool } from './exit-plan.js'
+export { webSearchTool, webFetchTool } from './web.js'
 
 /** Tools a subagent gets — excludes Task (no nested-subagent recursion). */
-export const baseTools: Tool[] = [readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool]
+export const baseTools: Tool[] = [
+  readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, webSearchTool, webFetchTool,
+]
 
 /** Tools that orchestrate the agent itself (need ToolContext hooks). */
 export const agentTools: Tool[] = [skillTool, taskTool, exitPlanTool]

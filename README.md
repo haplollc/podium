@@ -120,6 +120,7 @@ your pick with a progress bar, and drops you into a REPL with a live context met
 | 🧠 **Memory** | Hierarchical `PODIUM.md` / `CLAUDE.md` (user → project) |
 | ✨ **SOUL.md** | Give Podium a personality/voice — per-project or global |
 | 🪝 **Hooks** | `SessionStart` · `UserPromptSubmit` · `PreToolUse` · `PreCompact` from `~/.podium/settings.json` |
+| 🌐 **Web** | `WebSearch` + `WebFetch` (website scanning) — and it tells you when you're offline instead of failing |
 | 🔌 **Multi-backend** | Ollama · LM Studio · MLX behind one interface, auto-detected |
 
 ## In-session commands
