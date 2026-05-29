@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import type { ContextStats } from '@podium/core'
+import type { TodoItem } from '@podium/tools'
 import { ContextMeter } from './ContextMeter.js'
 import { MetricsBar, type MetricsData } from './MetricsBar.js'
 import { Markdown } from './Markdown.js'
@@ -18,6 +19,7 @@ export function Repl(props: {
   commands?: string[]           // command names for /autocomplete
   metrics?: MetricsData         // live dashboard over the input (toggle with /metrics)
   onAbort?: () => void          // Esc while busy stops the running turn
+  todos?: TodoItem[]            // live task checklist shown above the input
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
@@ -118,6 +120,21 @@ export function Repl(props: {
           <Text color="yellow"><Spinner type="dots" /></Text>
           <Text color="yellow"> {props.status ?? 'Thinking…'}</Text>
           <Text dimColor> ({elapsed}s)</Text>
+        </Box>
+      )}
+
+      {props.todos && props.todos.length > 0 && (
+        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="gray" paddingX={1}>
+          <Text dimColor>Tasks</Text>
+          {props.todos.map((t, i) => {
+            const mark = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'
+            const color = t.status === 'completed' ? 'green' : t.status === 'in_progress' ? 'cyan' : undefined
+            return (
+              <Text key={i} color={color} bold={t.status === 'in_progress'} strikethrough={t.status === 'completed'}>
+                {' '}{mark} {t.content}
+              </Text>
+            )
+          })}
         </Box>
       )}
 

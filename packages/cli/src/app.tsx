@@ -197,6 +197,8 @@ export function App(): React.ReactElement {
     setBusy(true)
     setStatus('Loading model…')   // until the model emits its first token
     setStreaming('')
+    todosRef.current = []
+    setTodos([])
     genStartRef.current = Date.now()
     genCharsRef.current = 0
     try {
@@ -324,20 +326,12 @@ export function App(): React.ReactElement {
       <Banner model={cfg?.model ?? 'no model'} cwd={process.cwd()} />
       {planMode && <Text color="magenta">— PLAN MODE (read-only) —</Text>}
       {yoloOn && <Text color="red">⚠ YOLO — skipping all permission prompts</Text>}
-      {todos.length > 0 && (
-        <Box flexDirection="column" marginBottom={1}>
-          {todos.map((t, i) => (
-            <Text key={i} dimColor>
-              {t.status === 'completed' ? '[x]' : t.status === 'in_progress' ? '[~]' : '[ ]'} {t.content}
-            </Text>
-          ))}
-        </Box>
-      )}
       <Repl
         stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy}
         streaming={streaming} status={status} commands={commandNames}
         metrics={metricsOn ? (metricsData ?? undefined) : undefined}
         onAbort={abortTurn}
+        todos={todos}
       />
       {pending && (
         <PermissionPrompt
