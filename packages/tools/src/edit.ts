@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { Tool } from './types.js'
 
 export const editTool: Tool = {
@@ -16,8 +17,9 @@ export const editTool: Tool = {
       required: ['file_path', 'old_string', 'new_string'],
     },
   },
-  async run(args) {
-    const file = String(args.file_path)
+  async run(args, ctx) {
+    const raw = String(args.file_path)
+    const file = path.isAbsolute(raw) ? raw : path.resolve(ctx.cwd, raw)
     const oldS = String(args.old_string)
     const newS = String(args.new_string)
     const replaceAll = Boolean(args.replace_all)
