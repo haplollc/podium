@@ -54,6 +54,23 @@ const echoTool = (calls: string[]): Tool => ({
   run: async (a) => { calls.push(String(a.value)); return `echoed ${a.value}` },
 })
 
+describe('runTurn repeat-guard', () => {
+  it('blocks an identical tool call after 2 runs and tells the model to change approach', async () => {
+    let runCount = 0
+    const failTool: Tool = {
+      schema: { name: 'Run', description: 'run', parameters: { type: 'object', properties: {} } },
+      run: async () => { runCount++; return 'No such file or directory' },
+    }
+    const sameCall: ChatEvent[] = [{ type: 'tool_call', call: { id: 'x', name: 'Run', arguments: { cmd: 'python3 todo.py' } } }, { type: 'done' }]
+    const provider = fakeProvider([sameCall, sameCall, sameCall, sameCall, [{ type: 'text', delta: 'giving up' }, { type: 'done' }]])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'run it' })
+    await runTurn({ provider, model: 'm', cm, tools: [failTool], systemPrompt: 'sys', maxSteps: 6 })
+    expect(runCount).toBe(2) // executed twice, then blocked on every repeat
+    expect(cm.messages().some(m => m.role === 'tool' && m.content.includes('stop repeating'))).toBe(true)
+  })
+})
+
 describe('runTurn', () => {
   it('executes a tool call then returns the final assistant text', async () => {
     const calls: string[] = []
@@ -114,8 +131,8 @@ describe('runTurn', () => {
 
   it('stops at maxSteps even if the model keeps calling tools', async () => {
     const calls: string[] = []
-    const loopingScripts: ChatEvent[][] = Array.from({ length: 10 }, () => [
-      { type: 'tool_call' as const, call: { id: 'x', name: 'Echo', arguments: { value: 'again' } } },
+    const loopingScripts: ChatEvent[][] = Array.from({ length: 10 }, (_, i) => [
+      { type: 'tool_call' as const, call: { id: 'x', name: 'Echo', arguments: { value: `again${i}` } } },
       { type: 'done' as const },
     ])
     const provider = fakeProvider(loopingScripts)

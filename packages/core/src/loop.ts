@@ -62,6 +62,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
   let repairs = 0
   let finalText = ''
   let modelStarted = false
+  const callCounts = new Map<string, number>()   // detect repeated identical tool calls
   for (let step = 0; step < maxSteps; step++) {
     if (opts.signal?.aborted) break
     if (shouldCompact(cm.stats(), buffer)) {
@@ -117,6 +118,17 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
     }
 
     for (const call of effectiveCalls) {
+      // Break repeat-loops: if the model fires the exact same call 3+ times, stop
+      // executing it and tell it to change approach (e.g. create the file first).
+      const sig = `${call.name}|${JSON.stringify(call.arguments)}`
+      const prior = callCounts.get(sig) ?? 0
+      callCounts.set(sig, prior + 1)
+      if (prior >= 2) {
+        const hint = `You have already run this exact ${call.name} call ${prior + 1} times and it keeps failing — stop repeating it. If a file does not exist, CREATE it with the Write tool before running it. Otherwise change your approach.`
+        cm.add({ role: 'tool', content: hint, tool_call_id: call.id })
+        opts.onToolResult?.(call, '(repeated call blocked — change approach)')
+        continue
+      }
       const d = decide(call.name, mode)
       if (d === 'deny') {
         cm.add({ role: 'tool', content: `Permission denied: ${call.name} is not allowed in ${mode} mode.`, tool_call_id: call.id })

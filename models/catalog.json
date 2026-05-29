@@ -27,7 +27,7 @@
       "tools": true, "minTierGB": 16, "recommendedForGB": [] },
 
     { "id": "qwen2.5-coder:14b", "label": "Qwen2.5-Coder 14B", "params": "14B",
-      "quant": "Q4_K_M", "weightsGB": 9.0, "kvPerKTokenGB": 0.16, "defaultContext": 16384,
+      "quant": "Q4_K_M", "weightsGB": 9.0, "kvPerKTokenGB": 0.16, "defaultContext": 8192,
       "tools": true, "minTierGB": 24, "recommendedForGB": [24] },
     { "id": "gpt-oss:20b", "label": "gpt-oss 20B", "params": "20B-A3.6B",
       "quant": "MXFP4", "weightsGB": 14.0, "kvPerKTokenGB": 0.08, "defaultContext": 8192,
