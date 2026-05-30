@@ -20,6 +20,29 @@ export const DANGEROUS: RegExp[] = [
   /\bsudo\s+rm\b/i,
 ]
 
+async function onPath(bin: string): Promise<boolean> {
+  const r = await execa('which', [bin], { reject: false })
+  return r.exitCode === 0 && r.stdout.trim().length > 0
+}
+
+let pythonFix: { python: boolean; pip: boolean } | null = null
+
+/** Rewrite bare `python`/`pip` command words to `python3`/`pip3` when only the 3-suffixed binary exists. */
+export async function normalizePython(cmd: string, _cwd: string): Promise<string> {
+  if (!/\bpip\b|\bpython\b/.test(cmd)) return cmd
+  if (!pythonFix) {
+    pythonFix = {
+      python: !(await onPath('python')) && (await onPath('python3')),
+      pip: !(await onPath('pip')) && (await onPath('pip3')),
+    }
+  }
+  let out = cmd
+  // command-position only: start, or after a shell separator/operator; not python3/pythonX.
+  if (pythonFix.python) out = out.replace(/(^|[\s;&|(])python(?![\w.])/g, '$1python3')
+  if (pythonFix.pip) out = out.replace(/(^|[\s;&|(])pip(?![\w.])/g, '$1pip3')
+  return out
+}
+
 export const bashTool: Tool = {
   schema: {
     name: 'Bash',
@@ -34,11 +57,15 @@ export const bashTool: Tool = {
     },
   },
   async run(args, ctx) {
-    const cmd = String(args.command)
+    let cmd = String(args.command)
     const blocked = DANGEROUS.find((re) => re.test(cmd))
     if (blocked) {
       return `Refused: this command matches a blocked dangerous pattern (${blocked.source}). If you really need it, ask the user to run it manually.`
     }
+    // Many systems (incl. macOS) only ship `python3`, not `python` / `pip`.
+    // Rewrite the bare command word so the agent's habitual `python …` just works.
+    cmd = await normalizePython(cmd, ctx.cwd)
+
     const result = await execa(cmd, {
       shell: true, cwd: ctx.cwd, timeout: Number(args.timeout_ms ?? 120000),
       reject: false, all: true, cancelSignal: ctx.signal,
@@ -46,9 +73,13 @@ export const bashTool: Tool = {
     if (result.isCanceled) return 'Stopped.'
     const body = result.all ?? `${result.stdout}\n${result.stderr}`
     let out = `exit=${result.exitCode}\n${body}`
-    // Loud, actionable hint when a command runs a file that doesn't exist yet.
-    if (result.exitCode !== 0 && /No such file or directory|can't open file|command not found|exit=127/i.test(out)) {
-      out += '\n\n[hint] That file/command does not exist. If you meant to run a script, CREATE it first with the Write tool (e.g. Write todo.py with the program), THEN run it.'
+    if (result.exitCode !== 0) {
+      const m = /(\w[\w.-]*): command not found/i.exec(out) || (/exit=127/.test(out) ? [, 'the command'] as RegExpExecArray : null)
+      if (m) {
+        out += `\n\n[hint] '${m[1]}' is not installed/on PATH. Use the correct binary name (e.g. python3 not python, pip3 not pip) or pick another approach. Do NOT rerun the same command.`
+      } else if (/No such file or directory|can't open file/i.test(out)) {
+        out += '\n\n[hint] That file does not exist yet. Create it with the Write tool first, then run it.'
+      }
     }
     return truncateLines(out, 200)
   },

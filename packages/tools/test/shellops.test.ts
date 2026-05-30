@@ -60,3 +60,17 @@ describe('shell tools', () => {
     expect(toolByName('Nope')).toBeUndefined()
   })
 })
+
+import { normalizePython } from '../src/bash.js'
+describe('normalizePython', () => {
+  it('rewrites bare python/pip to python3/pip3 only when needed, at command position', async () => {
+    // We can't control which binaries exist on CI, so just assert it never breaks
+    // python3 or substrings, and is idempotent.
+    const a = await normalizePython('python3 foo.py', process.cwd())
+    expect(a).toBe('python3 foo.py')           // never python3 -> python33
+    const b = await normalizePython('echo mypythonthing', process.cwd())
+    expect(b).toBe('echo mypythonthing')       // substring untouched
+    const c = await normalizePython('ls', process.cwd())
+    expect(c).toBe('ls')
+  })
+})
