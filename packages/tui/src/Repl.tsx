@@ -23,12 +23,16 @@ export function Repl(props: {
   todos?: TodoItem[]            // live task checklist shown above the input
   model?: string                // for the banner (printed once, at top)
   cwd?: string
+  history?: string[]            // past prompts, oldest→newest (up/down to recall)
+  queued?: string[]             // messages queued while busy (shown above input)
+  onQueue?: (text: string) => void  // called when Enter is pressed during a running turn
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
   const inputRef = useRef('')
   const selRef = useRef(0)
   const lastEscRef = useRef(0)
+  const histIdxRef = useRef(-1)  // -1 = live draft; else index into history
   const [elapsed, setElapsed] = useState(0)
   const busyStartRef = useRef(0)
 
@@ -53,12 +57,15 @@ export function Repl(props: {
   function setSelBoth(n: number) { selRef.current = n; setSel(n) }
 
   function submit(value: string) {
-    setBoth(''); setSelBoth(0)
-    if (value.length > 0) void props.onSubmit(value)
+    setBoth(''); setSelBoth(0); histIdxRef.current = -1
+    if (value.length === 0) return
+    // While a turn is running, queue instead of dropping; otherwise run now.
+    if (props.busy) props.onQueue?.(value)
+    else void props.onSubmit(value)
   }
 
   useInput((chunk, key) => {
-    // Esc is handled in every state: stop a running turn, or double-tap to clear input.
+    // Esc: stop a running turn, or double-tap to clear input.
     if (key.escape) {
       if (props.busy) { props.onAbort?.(); return }
       const now = Date.now()
@@ -66,14 +73,27 @@ export function Repl(props: {
       lastEscRef.current = now
       return
     }
-    if (props.busy) return
     const cur = inputRef.current
     const menu = matchesFor(cur)
     const menuOpen = menu.length > 0
+    const history = props.history ?? []
 
-    if (key.upArrow) { if (menuOpen) setSelBoth(Math.max(0, selRef.current - 1)); return }
-    if (key.downArrow) { if (menuOpen) setSelBoth(Math.min(menu.length - 1, selRef.current + 1)); return }
-    if (key.backspace || key.delete) { setBoth(cur.slice(0, -1)); setSelBoth(0); return }
+    if (key.upArrow) {
+      if (menuOpen) { setSelBoth(Math.max(0, selRef.current - 1)); return }
+      if (history.length === 0) return
+      histIdxRef.current = histIdxRef.current === -1 ? history.length - 1 : Math.max(0, histIdxRef.current - 1)
+      setBoth(history[histIdxRef.current]); setSelBoth(0)
+      return
+    }
+    if (key.downArrow) {
+      if (menuOpen) { setSelBoth(Math.min(menu.length - 1, selRef.current + 1)); return }
+      if (histIdxRef.current === -1) return
+      if (histIdxRef.current >= history.length - 1) { histIdxRef.current = -1; setBoth('') }
+      else { histIdxRef.current += 1; setBoth(history[histIdxRef.current]) }
+      setSelBoth(0)
+      return
+    }
+    if (key.backspace || key.delete) { setBoth(cur.slice(0, -1)); setSelBoth(0); histIdxRef.current = -1; return }
     if (key.tab) {
       if (menuOpen) setBoth('/' + menu[Math.min(selRef.current, menu.length - 1)] + ' ')
       setSelBoth(0)
@@ -83,11 +103,11 @@ export function Repl(props: {
 
     const parts = chunk.split(/[\r\n]/)
     if (key.return || parts.length > 1) {
-      if (menuOpen) { submit('/' + menu[Math.min(selRef.current, menu.length - 1)]); return }
+      if (menuOpen && !props.busy) { submit('/' + menu[Math.min(selRef.current, menu.length - 1)]); return }
       submit(cur + (parts[0] ?? ''))
       return
     }
-    setBoth(cur + chunk); setSelBoth(0)
+    setBoth(cur + chunk); setSelBoth(0); histIdxRef.current = -1
   })
 
   const menu = matchesFor(input)
@@ -143,6 +163,15 @@ export function Repl(props: {
         </Box>
       )}
 
+      {props.queued && props.queued.length > 0 && (
+        <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="gray" paddingX={1}>
+          <Text dimColor>queued ({props.queued.length}) — sent together when the current turn finishes</Text>
+          {props.queued.map((q, i) => (
+            <Text key={i} backgroundColor="blackBright" color="white"> ↳ {q.length > 74 ? q.slice(0, 73) + '…' : q} </Text>
+          ))}
+        </Box>
+      )}
+
       <Box marginTop={1}>
         {props.metrics ? <MetricsBar m={props.metrics} /> : <ContextMeter stats={props.stats} />}
       </Box>
@@ -156,7 +185,7 @@ export function Repl(props: {
       >
         <Text color="cyan">› </Text>
         {input.length === 0
-          ? <Text dimColor>send a message  ·  / for commands</Text>
+          ? <Text dimColor>{props.busy ? 'type to queue a message · Esc to stop' : 'send a message  ·  / for commands · ↑ history'}</Text>
           : <Text>{input}<Text color="cyan">▍</Text></Text>}
       </Box>
 

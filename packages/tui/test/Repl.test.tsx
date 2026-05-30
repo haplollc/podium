@@ -69,4 +69,50 @@ describe('Repl', () => {
     expect(f).toContain('partial answer so far')
     expect(f).toContain('Loading model…')
   })
+
+  it('Up arrow recalls the previous prompt from history', async () => {
+    const onSubmit = vi.fn(async () => '')
+    const { lastFrame, stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+        history={['first prompt', 'second prompt']}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('[A')  // up arrow → most recent
+    await vi.waitFor(() => expect(lastFrame()).toContain('second prompt'))
+    stdin.write('[A')  // up again → older
+    await vi.waitFor(() => expect(lastFrame()).toContain('first prompt'))
+    stdin.write('\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('first prompt'))
+  })
+
+  it('queues a message via onQueue when busy, instead of submitting', async () => {
+    const onSubmit = vi.fn()
+    const onQueue = vi.fn()
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} onQueue={onQueue} busy={true}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('queued msg\r')
+    await vi.waitFor(() => expect(onQueue).toHaveBeenCalledWith('queued msg'))
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('shows the queued box with pending messages', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={() => {}} busy={true}
+        queued={['do the next thing', 'then this']}
+      />,
+    )
+    const f = lastFrame() ?? ''
+    expect(f).toContain('queued (2)')
+    expect(f).toContain('do the next thing')
+  })
 })

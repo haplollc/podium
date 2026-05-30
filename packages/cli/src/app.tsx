@@ -46,6 +46,9 @@ export function App(): React.ReactElement {
   const [planMode, setPlanMode] = useState(false)
   const [status, setStatus] = useState('')       // spinner label while busy
   const [streaming, setStreaming] = useState('')  // live assistant text
+  const [history, setHistory] = useState<string[]>([])   // past prompts (↑/↓ recall)
+  const [queued, setQueued] = useState<string[]>([])      // messages queued while busy
+  const queuedRef = useRef<string[]>([])
   const [metricsOn, setMetricsOn] = useState(false)
   const [metricsData, setMetricsData] = useState<MetricsData | null>(null)
   const [yoloOn, setYoloOn] = useState(false)
@@ -63,6 +66,9 @@ export function App(): React.ReactElement {
   const genCharsRef = useRef(0)                     // streamed chars this turn
   const yoloRef = useRef(false)                     // skip permission prompts
   const abortRef = useRef<AbortController | null>(null) // cancels the active turn
+  const busyRef = useRef(false)                     // stale-closure-safe mirror of `busy`
+
+  function setBusyBoth(v: boolean) { busyRef.current = v; setBusy(v) }
 
   const todoStore: TodoStore = {
     set: (items) => { todosRef.current = items; setTodos(items) },
@@ -106,10 +112,10 @@ export function App(): React.ReactElement {
   async function warmModel(model: string) {
     if (!provider.warm) return
     setStatus(`Loading ${model}…`)
-    setBusy(true)
+    setBusyBoth(true)
     try { await provider.warm(model, KEEP_ALIVE) } catch { /* best-effort */ }
     setStatus('')
-    setBusy(false)
+    setBusyBoth(false)
   }
 
   function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
@@ -207,7 +213,7 @@ export function App(): React.ReactElement {
     cm.add({ role: 'user', content: userContent })
     const controller = new AbortController()
     abortRef.current = controller
-    setBusy(true)
+    setBusyBoth(true)
     setStatus('Loading model…')   // until the model emits its first token
     setStreaming('')
     todosRef.current = []
@@ -256,7 +262,7 @@ export function App(): React.ReactElement {
       setStreaming('')
       setStatus('')
       setStats(cm.stats())
-      setBusy(false)
+      setBusyBoth(false)
     }
   }
 
@@ -297,8 +303,29 @@ export function App(): React.ReactElement {
     toggleYolo: () => { yoloRef.current = !yoloRef.current; setYoloOn(yoloRef.current); return yoloRef.current },
   }
 
+  /** Drain any messages queued during the last turn and run them as one combined turn. */
+  async function drainQueue() {
+    const items = queuedRef.current
+    if (!items.length || busyRef.current) return
+    queuedRef.current = []
+    setQueued([])
+    const combined = items.join('\n\n')
+    setHistory(h => [...h, ...items])
+    push({ role: 'user', text: combined })
+    await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: combined })
+    await runAgentTurn(combined, true)
+    void drainQueue()  // anything queued during this turn
+  }
+
+  function onQueue(text: string) {
+    queuedRef.current = [...queuedRef.current, text]
+    setQueued(queuedRef.current)
+  }
+
   async function onSubmit(text: string) {
-    if (!cmRef.current || !cfg || !sys || busy) return
+    if (!cmRef.current || !cfg || !sys) return
+    if (busyRef.current) { onQueue(text); return }
+    setHistory(h => (h[h.length - 1] === text ? h : [...h, text]))
     const slash = parseSlash(text)
     if (slash) {
       push({ role: 'user', text })
@@ -309,6 +336,7 @@ export function App(): React.ReactElement {
     push({ role: 'user', text })
     await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: text })
     await runAgentTurn(text, true)
+    void drainQueue()
   }
 
   if (screen === 'loading' || !sys) return <Text color="yellow">✦ {bootStatus}</Text>
@@ -349,6 +377,7 @@ export function App(): React.ReactElement {
         onAbort={abortTurn}
         todos={todos}
         model={cfg?.model ?? 'no model'} cwd={process.cwd()}
+        history={history} queued={queued} onQueue={onQueue}
       />
       {pending && (
         <PermissionPrompt
