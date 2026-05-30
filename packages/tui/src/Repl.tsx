@@ -8,7 +8,7 @@ import { MetricsBar, type MetricsData } from './MetricsBar.js'
 import { Markdown } from './Markdown.js'
 import { Banner } from './Banner.js'
 
-export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output' | 'banner'; text: string }
+export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output' | 'note' | 'banner'; text: string }
 
 export function Repl(props: {
   stats: ContextStats
@@ -131,6 +131,7 @@ export function Repl(props: {
             )
           }
           if (e.role === 'tool') return <Text key={i}><Text color="green">⏺</Text> {e.text}</Text>
+          if (e.role === 'note') return <Text key={i} color="yellow">· {e.text}</Text>
           if (e.role === 'assistant') return <Box key={i} marginTop={1}><Markdown content={e.text} /></Box>
           return <Text key={i} color="cyan">› {e.text}</Text>
         }}

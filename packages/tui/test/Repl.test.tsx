@@ -70,6 +70,17 @@ describe('Repl', () => {
     expect(f).toContain('Loading model…')
   })
 
+  it('keeps working notes in the transcript', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[{ role: 'note', text: 'Hmm, let me check your folders.' }]}
+        onSubmit={() => {}} busy={false}
+      />,
+    )
+    expect(lastFrame()).toContain('Hmm, let me check your folders.')
+  })
+
   it('Up arrow recalls the previous prompt from history', async () => {
     const onSubmit = vi.fn(async () => '')
     const { lastFrame, stdin } = render(

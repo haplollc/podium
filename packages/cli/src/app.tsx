@@ -16,7 +16,7 @@ import { loadMemory } from './memory.js'
 import { loadSoul, DEFAULT_SOUL } from './soul.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
 import { loadHooks, runHooks, type HookConfig } from './hooks.js'
-import { toolLabel, toolActivity } from './tool-label.js'
+import { toolLabel, toolActivity, toolStartNote, toolResultNote } from './tool-label.js'
 import { ensureOllama, type EnsureResult } from './backend.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
@@ -222,6 +222,7 @@ export function App(): React.ReactElement {
     setTodos([])
     genStartRef.current = Date.now()
     genCharsRef.current = 0
+    push({ role: 'note', text: 'Hmm, let me get oriented and pick the next useful step.' })
     try {
       const reply = await runTurn({
         provider, model: cfg.model, cm, tools: allTools,
@@ -243,9 +244,10 @@ export function App(): React.ReactElement {
         onToolStart: (call) => {
           setStreaming('')                       // tool starting; drop the pre-tool preview
           setStatus(`${toolActivity(call)}…`)
+          push({ role: 'note', text: toolStartNote(call) })
           push({ role: 'tool', text: toolLabel(call) })
         },
-        onToolResult: (_call, result) => {
+        onToolResult: (call, result) => {
           const out = result.trim()
           if (!out) return
           const lines = out.split('\n')
@@ -253,6 +255,7 @@ export function App(): React.ReactElement {
             ? `${lines.slice(0, 12).join('\n')}\n… +${lines.length - 12} more lines`
             : out
           push({ role: 'output', text: shown })
+          push({ role: 'note', text: toolResultNote(call, result) })
         },
       })
       if (controller.signal.aborted) { push({ role: 'output', text: '⏹ Stopped.' }); return '' }
