@@ -74,9 +74,9 @@ export const bashTool: Tool = {
     const body = result.all ?? `${result.stdout}\n${result.stderr}`
     let out = `exit=${result.exitCode}\n${body}`
     if (result.exitCode !== 0) {
-      const m = /(\w[\w.-]*): command not found/i.exec(out) || (/exit=127/.test(out) ? [, 'the command'] as RegExpExecArray : null)
-      if (m) {
-        out += `\n\n[hint] '${m[1]}' is not installed/on PATH. Use the correct binary name (e.g. python3 not python, pip3 not pip) or pick another approach. Do NOT rerun the same command.`
+      const missing = /(\w[\w.-]*): command not found/i.exec(out)?.[1] ?? (/exit=127/.test(out) ? 'that command' : undefined)
+      if (missing) {
+        out += `\n\n[hint] '${missing}' is not installed/on PATH. Use the correct binary name (e.g. python3 not python, pip3 not pip) or pick another approach. Do NOT rerun the same command.`
       } else if (/No such file or directory|can't open file/i.test(out)) {
         out += '\n\n[hint] That file does not exist yet. Create it with the Write tool first, then run it.'
       }
