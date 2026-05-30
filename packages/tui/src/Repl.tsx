@@ -10,6 +10,18 @@ import { Banner } from './Banner.js'
 
 export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output' | 'note' | 'banner'; text: string }
 
+/**
+ * Only hide the live preview when the buffer is *clearly* a raw text tool-call
+ * (starts with { or [ and carries tool-call keys). Plain prose — even prose
+ * containing a code fence or a stray brace — must keep streaming so narration
+ * doesn't appear then vanish.
+ */
+function looksLikeRawToolCall(s: string): boolean {
+  const t = s.trimStart()
+  if (!t.startsWith('{') && !t.startsWith('[')) return false
+  return /"(name|tool|tool_name|function|arguments|tool_calls)"\s*:/.test(t)
+}
+
 export function Repl(props: {
   stats: ContextStats
   transcript: TranscriptEntry[]
@@ -137,7 +149,7 @@ export function Repl(props: {
         }}
       </Static>
 
-      {props.busy && props.streaming && !/```|\{\s*"name"\s*:|^\s*[{[]/.test(props.streaming)
+      {props.busy && props.streaming && !looksLikeRawToolCall(props.streaming)
         ? <Box marginTop={1}><Markdown content={props.streaming} /></Box>
         : null}
 

@@ -82,3 +82,12 @@ describe('file tools', () => {
     expect(res).toContain('+ b b b')
   })
 })
+
+import { writeTool as _wt } from '../src/write.js'
+describe('Write empty-content guard', () => {
+  it('refuses empty/whitespace content instead of writing a blank file', async () => {
+    const d = await import('node:fs/promises').then(m => m.mkdtemp(require('node:path').join(require('node:os').tmpdir(), 'w-')))
+    const out = await _wt.run({ file_path: require('node:path').join(d, 'x.py'), content: '   \n\n' }, { cwd: d })
+    expect(out).toMatch(/empty content/i)
+  })
+})

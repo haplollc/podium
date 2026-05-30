@@ -308,28 +308,8 @@ export function App(): React.ReactElement {
     toggleYolo: () => { yoloRef.current = !yoloRef.current; setYoloOn(yoloRef.current); return yoloRef.current },
   }
 
-  /** Drain any messages queued during the last turn and run them as one combined turn. */
-  async function drainQueue() {
-    const items = queuedRef.current
-    if (!items.length || busyRef.current) return
-    queuedRef.current = []
-    setQueued([])
-    const combined = items.join('\n\n')
-    setHistory(h => [...h, ...items])
-    push({ role: 'user', text: combined })
-    await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: combined })
-    await runAgentTurn(combined, true)
-    void drainQueue()  // anything queued during this turn
-  }
-
-  function onQueue(text: string) {
-    queuedRef.current = [...queuedRef.current, text]
-    setQueued(queuedRef.current)
-  }
-
-  async function onSubmit(text: string) {
-    if (!cmRef.current || !cfg || !sys) return
-    if (busyRef.current) { onQueue(text); return }
+  /** Run a single piece of user input: a slash command runs as a command, anything else as a turn. */
+  async function runUserInput(text: string) {
     setHistory(h => (h[h.length - 1] === text ? h : [...h, text]))
     const slash = parseSlash(text)
     if (slash) {
@@ -341,7 +321,40 @@ export function App(): React.ReactElement {
     push({ role: 'user', text })
     await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: text })
     await runAgentTurn(text, true)
-    void drainQueue()
+  }
+
+  /**
+   * Drain messages queued while busy. Consecutive plain messages are combined
+   * into one turn; queued slash commands (/model, /clear, …) run individually,
+   * in order, so a queued command actually executes.
+   */
+  async function drainQueue() {
+    if (busyRef.current) return
+    while (queuedRef.current.length) {
+      const items = queuedRef.current
+      queuedRef.current = []
+      setQueued([])
+      const groups: string[] = []
+      let buf: string[] = []
+      for (const it of items) {
+        if (parseSlash(it)) { if (buf.length) { groups.push(buf.join('\n\n')); buf = [] } groups.push(it) }
+        else buf.push(it)
+      }
+      if (buf.length) groups.push(buf.join('\n\n'))
+      for (const g of groups) await runUserInput(g)
+    }
+  }
+
+  function onQueue(text: string) {
+    queuedRef.current = [...queuedRef.current, text]
+    setQueued(queuedRef.current)
+  }
+
+  async function onSubmit(text: string) {
+    if (!cmRef.current || !cfg || !sys) return
+    if (busyRef.current) { onQueue(text); return }
+    await runUserInput(text)
+    await drainQueue()
   }
 
   if (screen === 'loading' || !sys) return <Text color="yellow">✦ {bootStatus}</Text>

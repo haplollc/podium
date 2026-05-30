@@ -22,6 +22,12 @@ export const writeTool: Tool = {
     const file = path.isAbsolute(raw) ? raw : path.resolve(ctx.cwd, raw)
     const before = await readFile(file, 'utf8').catch(() => '')
     const content = stringArg(args, ['content', 'text'], 'content')
+    // Guard against the common small-model failure of calling Write before the
+    // content is ready: don't silently create an empty file (it makes the model
+    // loop). Refuse with an actionable message instead.
+    if (content.trim() === '') {
+      return `Error: Write was called with empty content for ${path.basename(file)}. Call Write again with the FULL file contents in the "content" field. (To create a deliberately empty file, use Bash: touch ${path.basename(file)}.)`
+    }
     await mkdir(path.dirname(file), { recursive: true })
     await writeFile(file, content)
     const verb = before ? 'Updated' : 'Created'
