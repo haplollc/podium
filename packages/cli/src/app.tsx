@@ -116,6 +116,8 @@ export function App(): React.ReactElement {
     try { await provider.warm(model, KEEP_ALIVE) } catch { /* best-effort */ }
     setStatus('')
     setBusyBoth(false)
+    // Anything typed while the model was loading is queued — run it now.
+    void drainQueue()
   }
 
   function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
