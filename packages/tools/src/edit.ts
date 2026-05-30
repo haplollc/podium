@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Tool } from './types.js'
 import { diffSummary } from './diff.js'
+import { stringArg } from './args.js'
 
 export const editTool: Tool = {
   schema: {
@@ -19,10 +20,10 @@ export const editTool: Tool = {
     },
   },
   async run(args, ctx) {
-    const raw = String(args.file_path)
+    const raw = stringArg(args, ['file_path', 'path', 'file'], 'file_path')
     const file = path.isAbsolute(raw) ? raw : path.resolve(ctx.cwd, raw)
-    const oldS = String(args.old_string)
-    const newS = String(args.new_string)
+    const oldS = stringArg(args, ['old_string', 'old', 'search'], 'old_string')
+    const newS = stringArg(args, ['new_string', 'new', 'replace'], 'new_string')
     const replaceAll = Boolean(args.replace_all)
     const content = await readFile(file, 'utf8')
     const count = content.split(oldS).length - 1

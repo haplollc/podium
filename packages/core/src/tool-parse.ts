@@ -13,21 +13,15 @@ export interface ParsedTools {
  */
 export function extractToolCalls(text: string, knownNames: string[]): ParsedTools {
   const known = new Set(knownNames)
-  const objects = findJsonObjects(stripFences(text))
+  const values = findJsonValues(stripFences(text))
   const calls: ToolCall[] = []
   let cleaned = text
   let idx = 0
-  for (const obj of objects) {
-    const rec = obj.value as Record<string, unknown>
-    const name = typeof rec.name === 'string' ? rec.name : undefined
-    if (!name || !known.has(name)) continue
-    let args: unknown = rec.arguments ?? rec.parameters ?? {}
-    if (typeof args === 'string') {
-      try { args = JSON.parse(args) } catch { /* leave as-is below */ }
-    }
-    if (typeof args !== 'object' || args === null) args = {}
-    calls.push({ id: `text_${name}_${idx++}`, name, arguments: args as Record<string, unknown> })
-    cleaned = cleaned.replace(obj.raw, '')
+  for (const value of values) {
+    const parsed = toolCallsFromValue(value.value, known, () => idx++)
+    if (!parsed.length) continue
+    calls.push(...parsed)
+    cleaned = cleaned.replace(value.raw, '')
   }
   return { calls, cleanedText: cleanModelText(cleaned) }
 }
@@ -38,6 +32,7 @@ export function extractToolCalls(text: string, knownNames: string[]): ParsedTool
  */
 export function cleanModelText(text: string): string {
   return stripSpecialTokens(text)
+    .replace(/<\/?(tool_call|tool|function_call)>/gi, '')
     .replace(/```[a-zA-Z]*[ \t]*\n?[ \t]*```/g, '') // empty fenced blocks
     .replace(/^[ \t]*```[a-zA-Z]*[ \t]*$/gm, '')     // orphan fence lines
     .replace(/\n{3,}/g, '\n\n')
@@ -59,13 +54,14 @@ function stripFences(s: string): string {
   return s.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '')
 }
 
-/** Find top-level balanced {...} substrings that parse as JSON, quote-aware. */
-function findJsonObjects(s: string): Array<{ raw: string; value: unknown }> {
+/** Find top-level balanced JSON object/array substrings that parse, quote-aware. */
+function findJsonValues(s: string): Array<{ raw: string; value: unknown }> {
   const out: Array<{ raw: string; value: unknown }> = []
   let i = 0
   while (i < s.length) {
-    if (s[i] === '{') {
-      const end = matchBrace(s, i)
+    const ch = s[i]
+    if (ch === '{' || ch === '[') {
+      const end = matchBalanced(s, i, ch, ch === '{' ? '}' : ']')
       if (end > i) {
         const raw = s.slice(i, end + 1)
         const value = tolerantParse(raw)
@@ -77,6 +73,48 @@ function findJsonObjects(s: string): Array<{ raw: string; value: unknown }> {
     i++
   }
   return out
+}
+
+function toolCallsFromValue(value: unknown, known: Set<string>, nextIndex: () => number): ToolCall[] {
+  if (Array.isArray(value)) return value.flatMap(v => toolCallsFromValue(v, known, nextIndex))
+  if (!isRecord(value)) return []
+
+  const nested = [
+    value.tool_calls,
+    value.tool_call,
+    value.function_call,
+    value.tool_use,
+  ]
+  const nestedCalls = nested.flatMap(v => toolCallsFromValue(v, known, nextIndex))
+
+  const fn = isRecord(value.function) ? value.function : undefined
+  const name = firstString(value.name, value.tool, value.tool_name, value.action, fn?.name)
+  if (!name || !known.has(name)) return nestedCalls
+
+  const rawArgs = value.arguments ?? value.parameters ?? value.input ?? value.args ?? fn?.arguments ?? fn?.parameters ?? {}
+  const args = coerceArguments(rawArgs)
+  return [
+    ...nestedCalls,
+    { id: `text_${name}_${nextIndex()}`, name, arguments: args },
+  ]
+}
+
+function coerceArguments(value: unknown): Record<string, unknown> {
+  let args = value
+  if (typeof args === 'string') {
+    const parsed = tolerantParse(args)
+    if (parsed !== undefined) args = parsed
+  }
+  return isRecord(args) ? args : {}
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) if (typeof value === 'string' && value.trim()) return value
+  return undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -108,7 +146,7 @@ function escapeRawControlInStrings(s: string): string {
   return out
 }
 
-function matchBrace(s: string, start: number): number {
+function matchBalanced(s: string, start: number, open: string, close: string): number {
   let depth = 0
   let inStr = false
   let esc = false
@@ -119,8 +157,8 @@ function matchBrace(s: string, start: number): number {
       else if (ch === '\\') esc = true
       else if (ch === '"') inStr = false
     } else if (ch === '"') inStr = true
-    else if (ch === '{') depth++
-    else if (ch === '}') { depth--; if (depth === 0) return i }
+    else if (ch === open) depth++
+    else if (ch === close) { depth--; if (depth === 0) return i }
   }
   return -1
 }

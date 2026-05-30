@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@podium/core": ["packages/core/src/index.ts"],
+      "@podium/hardware": ["packages/hardware/src/index.ts"],
+      "@podium/providers": ["packages/providers/src/index.ts"],
+      "@podium/skills": ["packages/skills/src/index.ts"],
+      "@podium/tools": ["packages/tools/src/index.ts"],
+      "@podium/tui": ["packages/tui/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*"]
+}

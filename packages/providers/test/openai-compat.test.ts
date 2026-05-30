@@ -40,6 +40,28 @@ describe('OpenAICompatProvider', () => {
     expect(events.at(-1)?.type).toBe('done')
   })
 
+  it('chat() tolerates multi-line SSE data events', async () => {
+    const body = 'data: {"choices":[\ndata: {"delta":{"content":"Hello"}}\ndata: ]}\n\ndata: [DONE]\n\n'
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 200 })))
+    const p = new OpenAICompatProvider('lmstudio', 'http://localhost:1234/v1')
+    const events: Array<{ type: string }> = []
+    for await (const e of p.chat({ model: 'm', messages: [] })) events.push(e)
+    const text = events.filter((e): e is { type: 'text'; delta: string } => e.type === 'text').map(e => e.delta).join('')
+    expect(text).toBe('Hello')
+  })
+
+  it('chat() surfaces backend stream errors', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sse([
+      JSON.stringify({ error: { message: 'model unloaded' } }),
+    ])))
+    const p = new OpenAICompatProvider('lmstudio', 'http://localhost:1234/v1')
+    await expect(async () => {
+      for await (const _ of p.chat({ model: 'm', messages: [] })) {
+        // consume stream
+      }
+    }).rejects.toThrow(/model unloaded/)
+  })
+
   it('pull() throws for the base adapter', async () => {
     const p = new OpenAICompatProvider('mlx', 'http://localhost:8080/v1')
     await expect(p.pull('m', () => {})).rejects.toThrow(/not supported/)

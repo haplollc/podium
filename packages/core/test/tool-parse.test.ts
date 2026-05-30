@@ -47,6 +47,36 @@ describe('extractToolCalls', () => {
     expect(calls[0].arguments).toEqual({ command: 'ls' })
   })
 
+  it('parses common local-model aliases for tool name and input', () => {
+    const text = '{"tool":"Read","input":{"path":"README.md"}}'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].name).toBe('Read')
+    expect(calls[0].arguments).toEqual({ path: 'README.md' })
+  })
+
+  it('parses OpenAI-style text-emitted tool_calls wrappers', () => {
+    const text = '{"tool_calls":[{"function":{"name":"Bash","arguments":"{\\"cmd\\":\\"pwd\\"}"}}]}'
+    const { calls, cleanedText } = extractToolCalls(text, KNOWN)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].name).toBe('Bash')
+    expect(calls[0].arguments).toEqual({ cmd: 'pwd' })
+    expect(cleanedText).toBe('')
+  })
+
+  it('parses an array of tool calls', () => {
+    const text = '[{"name":"Read","arguments":{"file_path":"a"}},{"name":"Read","arguments":{"file_path":"b"}}]'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(calls.map(c => c.arguments.file_path)).toEqual(['a', 'b'])
+  })
+
+  it('strips leftover tool call tags from display text', () => {
+    const text = '<tool_call>{"name":"Read","arguments":{"file_path":"/x"}}</tool_call>'
+    const { calls, cleanedText } = extractToolCalls(text, KNOWN)
+    expect(calls).toHaveLength(1)
+    expect(cleanedText).toBe('')
+  })
+
   it('ignores JSON objects whose name is not a known tool', () => {
     const text = '{"name":"NotATool","arguments":{}}'
     expect(extractToolCalls(text, KNOWN).calls).toHaveLength(0)

@@ -48,6 +48,29 @@ describe('OllamaProvider streaming', () => {
     expect(ids[0]).toBe(ids[1])
   })
 
+  it('chat() accepts stringified tool arguments from local backends', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ndjson([
+      { message: { tool_calls: [{ function: { name: 'Read', arguments: '{"file_path":"/x"}' } }] } },
+      { done: true },
+    ])))
+    const p = new OllamaProvider()
+    const calls: Array<{ arguments: Record<string, unknown> }> = []
+    for await (const e of p.chat({ model: 'm', messages: [] })) {
+      if (e.type === 'tool_call') calls.push(e.call)
+    }
+    expect(calls[0].arguments).toEqual({ file_path: '/x' })
+  })
+
+  it('chat() surfaces Ollama stream errors', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ndjson([{ error: 'model not found' }])))
+    const p = new OllamaProvider()
+    await expect(async () => {
+      for await (const _ of p.chat({ model: 'm', messages: [] })) {
+        // consume stream
+      }
+    }).rejects.toThrow(/model not found/)
+  })
+
   it('pull() reports each progress line to the callback', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ndjson([
       { status: 'pulling manifest' },

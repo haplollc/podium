@@ -2,6 +2,7 @@ import type {
   Provider, HealthStatus, LocalModel, PullProgress, ModelCapabilities,
   ChatRequest, ChatEvent, ToolCall,
 } from './types.js'
+import { coerceToolArguments, streamError } from './tool-args.js'
 
 export class OllamaProvider implements Provider {
   readonly id = 'ollama' as const
@@ -28,8 +29,11 @@ export class OllamaProvider implements Provider {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ model, stream: true }),
     })
+    if (!r.ok) throw new Error(`Ollama pull failed: HTTP ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`)
     if (!r.body) throw new Error('no response body from /api/pull')
     for await (const line of readNdjson(r.body)) {
+      const error = streamError(line)
+      if (error) throw new Error(`Ollama pull failed: ${error}`)
       onProgress(line as PullProgress)
     }
   }
@@ -99,15 +103,18 @@ export class OllamaProvider implements Provider {
     if (!r.body) throw new Error('no response body from /api/chat')
     for await (const chunk of readNdjson(r.body)) {
       const c = chunk as {
-        message?: { content?: string; tool_calls?: { function: { name: string; arguments: Record<string, unknown> } }[] }
+        message?: { content?: string; tool_calls?: { function: { name: string; arguments: unknown } }[] }
         done?: boolean
       }
+      const error = streamError(c)
+      if (error) throw new Error(`Ollama chat failed: ${error}`)
       if (c.message?.content) yield { type: 'text', delta: c.message.content }
       for (const tc of c.message?.tool_calls ?? []) {
+        const args = coerceToolArguments(tc.function.arguments)
         const call: ToolCall = {
-          id: `call_${tc.function.name}_${Math.abs(hash(JSON.stringify(tc.function.arguments)))}`,
+          id: `call_${tc.function.name}_${Math.abs(hash(JSON.stringify(args)))}`,
           name: tc.function.name,
-          arguments: tc.function.arguments,
+          arguments: args,
         }
         yield { type: 'tool_call', call }
       }
@@ -135,8 +142,17 @@ async function* readNdjson(body: ReadableStream<Uint8Array>): AsyncIterable<unkn
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl).trim()
       buf = buf.slice(nl + 1)
-      if (line) yield JSON.parse(line)
+      if (line) yield parseNdjsonLine(line)
     }
   }
-  if (buf.trim()) yield JSON.parse(buf.trim())
+  buf += decoder.decode()
+  if (buf.trim()) yield parseNdjsonLine(buf.trim())
+}
+
+function parseNdjsonLine(line: string): unknown {
+  try {
+    return JSON.parse(line)
+  } catch (e) {
+    throw new Error(`invalid NDJSON from Ollama: ${line.slice(0, 120)} (${(e as Error).message})`)
+  }
 }

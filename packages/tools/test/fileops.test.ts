@@ -42,6 +42,20 @@ describe('file tools', () => {
     expect(await readFile(f, 'utf8')).toBe('x')
   })
 
+  it('file tools accept common local-model path aliases', async () => {
+    const f = path.join(dir, 'alias.txt')
+    await writeTool.run({ path: f, text: 'hello alias' }, { cwd: dir })
+    const read = await readTool.run({ path: f }, { cwd: dir })
+    expect(read).toContain('hello alias')
+    await editTool.run({ path: f, old: 'alias', new: 'world' }, { cwd: dir })
+    expect(await readFile(f, 'utf8')).toBe('hello world')
+  })
+
+  it('file tools fail clearly when required arguments are missing', async () => {
+    await expect(readTool.run({}, { cwd: dir })).rejects.toThrow(/Missing required argument "file_path"/)
+    await expect(writeTool.run({ file_path: path.join(dir, 'x') }, { cwd: dir })).rejects.toThrow(/Missing required argument "content"/)
+  })
+
   it('edit replaces a unique string and errors on non-unique', async () => {
     const f = path.join(dir, 'c.txt')
     await writeFile(f, 'foo bar foo')

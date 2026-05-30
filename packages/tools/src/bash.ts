@@ -1,6 +1,7 @@
 import { execa } from 'execa'
 import type { Tool } from './types.js'
 import { truncateLines } from './truncate.js'
+import { stringArg } from './args.js'
 
 /**
  * Hard-blocked command patterns. A small local model is easy to confuse or
@@ -57,7 +58,7 @@ export const bashTool: Tool = {
     },
   },
   async run(args, ctx) {
-    let cmd = String(args.command)
+    let cmd = stringArg(args, ['command', 'cmd'], 'command')
     const blocked = DANGEROUS.find((re) => re.test(cmd))
     if (blocked) {
       return `Refused: this command matches a blocked dangerous pattern (${blocked.source}). If you really need it, ask the user to run it manually.`

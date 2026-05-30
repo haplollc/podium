@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Tool } from './types.js'
 import { truncateLines } from './truncate.js'
+import { stringArg } from './args.js'
 
 const DEFAULT_MAX_LINES = 250 // small-context default
 
@@ -19,7 +20,7 @@ export const readTool: Tool = {
     },
   },
   async run(args, ctx) {
-    const raw0 = String(args.file_path)
+    const raw0 = stringArg(args, ['file_path', 'path', 'file'], 'file_path')
     const file = path.isAbsolute(raw0) ? raw0 : path.resolve(ctx.cwd, raw0)
     const max = Number(args.max_lines ?? DEFAULT_MAX_LINES)
     const raw = await readFile(file, 'utf8')

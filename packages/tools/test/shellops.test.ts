@@ -22,6 +22,15 @@ describe('shell tools', () => {
     expect(out).toContain('exit=7')
   })
 
+  it('bash accepts cmd as a command alias', async () => {
+    const out = await bashTool.run({ cmd: 'echo alias-ok' }, { cwd: dir })
+    expect(out).toContain('alias-ok')
+  })
+
+  it('bash fails clearly when command is missing', async () => {
+    await expect(bashTool.run({}, { cwd: dir })).rejects.toThrow(/Missing required argument "command"/)
+  })
+
   it('grep finds matching lines', async () => {
     await writeFile(path.join(dir, 'f.ts'), 'const needle = 1\nconst other = 2')
     const out = await grepTool.run({ pattern: 'needle' }, { cwd: dir })

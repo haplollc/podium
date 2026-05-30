@@ -2,6 +2,7 @@ import type {
   Provider, HealthStatus, LocalModel, PullProgress, ModelCapabilities,
   ChatRequest, ChatEvent, ToolCall,
 } from './types.js'
+import { coerceToolArguments, streamError } from './tool-args.js'
 
 /** Shared adapter for OpenAI-compatible local servers (LM Studio, mlx_lm.server). */
 export class OpenAICompatProvider implements Provider {
@@ -65,6 +66,8 @@ export class OpenAICompatProvider implements Provider {
       if (data === '[DONE]') break
       let j: { choices?: { delta?: { content?: string; tool_calls?: { index: number; id?: string; function?: { name?: string; arguments?: string } }[] } }[] }
       try { j = JSON.parse(data) } catch { continue }
+      const error = streamError(j)
+      if (error) throw new Error(`${this.id} chat failed: ${error}`)
       const delta = j.choices?.[0]?.delta
       if (delta?.content) yield { type: 'text', delta: delta.content }
       for (const tc of delta?.tool_calls ?? []) {
@@ -77,8 +80,7 @@ export class OpenAICompatProvider implements Provider {
     }
     for (const [i, c] of acc) {
       if (!c.name) continue
-      let args: Record<string, unknown> = {}
-      try { args = c.args ? JSON.parse(c.args) : {} } catch { /* leave empty */ }
+      const args = coerceToolArguments(c.args)
       const call: ToolCall = { id: c.id || `oai_${c.name}_${i}`, name: c.name, arguments: args }
       yield { type: 'tool_call', call }
     }
@@ -90,15 +92,37 @@ async function* readSse(body: ReadableStream<Uint8Array>): AsyncIterable<string>
   const reader = body.getReader()
   const dec = new TextDecoder()
   let buf = ''
+  let eventData: string[] = []
+
+  function flush(): string | undefined {
+    if (!eventData.length) return undefined
+    const data = eventData.join('\n').trim()
+    eventData = []
+    return data || undefined
+  }
+
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
     buf += dec.decode(value, { stream: true })
     let nl: number
     while ((nl = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, nl).trim()
+      const raw = buf.slice(0, nl)
       buf = buf.slice(nl + 1)
-      if (line.startsWith('data:')) yield line.slice(5).trim()
+      const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+      if (line === '') {
+        const data = flush()
+        if (data) yield data
+      } else if (line.startsWith('data:')) {
+        eventData.push(line.slice(5).trimStart())
+      }
     }
   }
+  buf += dec.decode()
+  if (buf) {
+    const line = buf.endsWith('\r') ? buf.slice(0, -1) : buf
+    if (line.startsWith('data:')) eventData.push(line.slice(5).trimStart())
+  }
+  const data = flush()
+  if (data) yield data
 }
