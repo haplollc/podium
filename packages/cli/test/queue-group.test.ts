@@ -13,3 +13,15 @@ describe('queue grouping', () => {
     expect(groupQueuedInputs(['/model'])).toEqual(['/model'])
   })
 })
+
+describe('queue grouping edge cases', () => {
+  it('all-plain stays a single combined turn', () => {
+    expect(groupQueuedInputs(['a', 'b', 'c'])).toEqual(['a\n\nb\n\nc'])
+  })
+  it('all-slash each runs individually in order', () => {
+    expect(groupQueuedInputs(['/clear', '/help', '/model'])).toEqual(['/clear', '/help', '/model'])
+  })
+  it('empty queue yields nothing', () => {
+    expect(groupQueuedInputs([])).toEqual([])
+  })
+})

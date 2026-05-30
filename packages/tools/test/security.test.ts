@@ -41,3 +41,11 @@ describe('WebFetch SSRF guard', () => {
     expect(out).toMatch(/Refused/)
   })
 })
+
+import { normalizePython } from '../src/bash.js'
+describe('normalizePython (command-position only)', () => {
+  it('does not touch python3 or substrings', async () => {
+    expect(await normalizePython('python3 a.py', process.cwd())).toBe('python3 a.py')
+    expect(await normalizePython('echo mypythonscript', process.cwd())).toBe('echo mypythonscript')
+  })
+})

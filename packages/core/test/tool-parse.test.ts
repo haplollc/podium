@@ -127,3 +127,17 @@ describe('extractToolCalls', () => {
     expect(calls.map(c => c.arguments.file_path)).toEqual(['a', 'b'])
   })
 })
+
+describe('parse-error propagation', () => {
+  it('flags a tool call whose arguments string is unparseable', () => {
+    const text = '{"name":"Write","arguments":"this is not json"}'
+    const { calls } = extractToolCalls(text, ['Write'])
+    expect(calls).toHaveLength(1)
+    expect(calls[0].arguments.__parse_error).toBeTypeOf('string')
+  })
+  it('empty argument string coerces to empty object (not an error)', () => {
+    const text = '{"name":"Write","arguments":""}'
+    const { calls } = extractToolCalls(text, ['Write'])
+    expect(calls[0].arguments).toEqual({})
+  })
+})
