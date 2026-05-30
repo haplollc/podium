@@ -46,6 +46,8 @@ export interface RunTurnOpts {
   signal?: AbortSignal
   /** Max times to push the model to act after it only states an intention. Default 2. */
   maxPromiseNudges?: number
+  /** Sampling temperature for the agent turn. Default 0 (greedy) for reliable tool use. */
+  temperature?: number
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -70,8 +72,9 @@ function looksLikeRefusal(text: string): boolean {
  *  calling tools, returns the final assistant text. Auto-compacts before each step. */
 export async function runTurn(opts: RunTurnOpts): Promise<string> {
   const { provider, model, cm, tools, systemPrompt } = opts
-  const maxSteps = opts.maxSteps ?? 12
+  const maxSteps = opts.maxSteps ?? 20
   const buffer = opts.compactBuffer ?? 1500
+  const temperature = opts.temperature ?? 0   // greedy by default → reliable tool use
   const toolSchemas = tools.map(t => t.schema)
 
   const mode = opts.planMode ? 'plan' : (opts.mode ?? 'default')
@@ -97,7 +100,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
     let text = ''
     const toolCalls: ToolCall[] = []
     try {
-      for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx, keepAlive: opts.keepAlive, signal: opts.signal })) {
+      for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx, keepAlive: opts.keepAlive, signal: opts.signal, temperature })) {
         if (!modelStarted) { modelStarted = true; opts.onModelStart?.() }
         if (ev.type === 'text') { text += ev.delta; opts.onText?.(ev.delta) }
         else if (ev.type === 'tool_call') toolCalls.push(ev.call)
@@ -197,9 +200,13 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
       } catch (e) {
         result = `Error: ${(e as Error).message}`
       }
-      cm.add({ role: 'tool', content: result, tool_call_id: call.id })
+      cm.add({ role: 'tool', content: result, tool_call_id: call.id, name: call.name })
       opts.onToolResult?.(call, result)
     }
+  }
+  // Guard: a turn that did work but produced no final text shouldn't look like nothing happened.
+  if (!finalText && cm.messages().some(m => m.role === 'tool')) {
+    finalText = 'Done.'
   }
   return finalText
 }

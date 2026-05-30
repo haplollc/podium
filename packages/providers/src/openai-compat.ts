@@ -43,7 +43,8 @@ export class OpenAICompatProvider implements Provider {
         model: req.model,
         messages: req.messages.map(m => ({
           role: m.role,
-          content: m.content,
+          // Strict OpenAI-compatible servers want content:null (not "") with tool_calls.
+          content: m.tool_calls?.length && !m.content ? null : m.content,
           tool_calls: m.tool_calls?.map(tc => ({
             id: tc.id, type: 'function',
             function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
@@ -56,6 +57,7 @@ export class OpenAICompatProvider implements Provider {
       }),
       signal: req.signal,
     })
+    if (!r.ok) throw new Error(`chat failed: HTTP ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`)
     if (!r.body) throw new Error('no response body from /chat/completions')
 
     const acc = new Map<number, { id: string; name: string; args: string }>()

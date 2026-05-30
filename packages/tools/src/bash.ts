@@ -2,10 +2,28 @@ import { execa } from 'execa'
 import type { Tool } from './types.js'
 import { truncateLines } from './truncate.js'
 
+/**
+ * Hard-blocked command patterns. A small local model is easy to confuse or
+ * prompt-inject (tool output is fed back into it), so we refuse the highest-impact
+ * destructive / exfiltration / remote-exec patterns outright — even before the
+ * permission prompt. This is a safety net, not a full sandbox.
+ */
+export const DANGEROUS: RegExp[] = [
+  /\brm\s+(-[a-z]*\s+)*-[a-z]*r[a-z]*f|\brm\s+(-[a-z]*\s+)*-[a-z]*f[a-z]*r/i, // rm -rf / -fr
+  /\brm\s+-[a-z]*r[a-z]*\s+(\/|~|\$HOME)(\s|$)/i,                            // rm -r / or ~
+  /\b(mkfs|fdisk)\b/i,
+  /\bdd\b[^\n]*\bof=\/dev\//i,
+  /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,                          // fork bomb
+  /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(sh|bash|zsh)\b/i,                   // curl … | sh
+  /\bchmod\s+-R\s+0*777\s+\//i,
+  />\s*\/dev\/(sd|nvme|disk)/i,
+  /\bsudo\s+rm\b/i,
+]
+
 export const bashTool: Tool = {
   schema: {
     name: 'Bash',
-    description: 'Run a shell command in the working directory. Avoid cat/grep/find/sed — use Read/Grep/Glob/Edit instead.',
+    description: 'Run a shell command in the working directory. Avoid cat/grep/find/sed — use Read/Grep/Glob/Edit instead. Never run a script you have not created yet: use the Write tool to create files before running them.',
     parameters: {
       type: 'object',
       properties: {
@@ -16,7 +34,12 @@ export const bashTool: Tool = {
     },
   },
   async run(args, ctx) {
-    const result = await execa(String(args.command), {
+    const cmd = String(args.command)
+    const blocked = DANGEROUS.find((re) => re.test(cmd))
+    if (blocked) {
+      return `Refused: this command matches a blocked dangerous pattern (${blocked.source}). If you really need it, ask the user to run it manually.`
+    }
+    const result = await execa(cmd, {
       shell: true, cwd: ctx.cwd, timeout: Number(args.timeout_ms ?? 120000),
       reject: false, all: true, cancelSignal: ctx.signal,
     })

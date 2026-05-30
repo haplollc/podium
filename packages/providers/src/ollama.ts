@@ -83,7 +83,9 @@ export class OllamaProvider implements Provider {
       body: JSON.stringify({
         model: req.model,
         messages: req.messages.map(m => ({
-          role: m.role, content: m.content,
+          role: m.role,
+          content: m.content,
+          ...(m.role === 'tool' && m.name ? { tool_name: m.name } : {}),
           tool_calls: m.tool_calls?.map(tc => ({ function: { name: tc.name, arguments: tc.arguments } })),
         })),
         tools: req.tools?.map(t => ({ type: 'function', function: t })),
@@ -93,6 +95,7 @@ export class OllamaProvider implements Provider {
       }),
       signal: req.signal,
     })
+    if (!r.ok) throw new Error(`Ollama chat failed: HTTP ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`)
     if (!r.body) throw new Error('no response body from /api/chat')
     for await (const chunk of readNdjson(r.body)) {
       const c = chunk as {

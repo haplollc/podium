@@ -27,6 +27,28 @@ async function fetchWithTimeout(url: string, ms: number, browser = false, extern
   }
 }
 
+/**
+ * SSRF guard for WebFetch: refuse non-http(s) and private/loopback/link-local
+ * hosts so a (possibly prompt-injected) model can't read cloud metadata
+ * (169.254.169.254) or the local model backends (localhost:11434/8080/1234).
+ * Returns a refusal string when blocked, else null.
+ */
+export function ssrfBlocked(url: string): string | null {
+  let u: URL
+  try { u = new URL(url) } catch { return `Refused: invalid URL.` }
+  if (!/^https?:$/.test(u.protocol)) return `Refused: only http/https URLs are allowed.`
+  const h = u.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  if (
+    h === 'localhost' || h === '0.0.0.0' || h === '::1' ||
+    /^127\./.test(h) || /^169\.254\./.test(h) || /^10\./.test(h) ||
+    /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    /\.local$/.test(h) || /^fe80:/i.test(h) || /^f[cd][0-9a-f]{2}:/i.test(h)
+  ) {
+    return `Refused: fetching internal/loopback/link-local addresses is not allowed.`
+  }
+  return null
+}
+
 export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -74,7 +96,7 @@ export function parseDuckDuckGo(html: string): SearchResult[] {
 export const webSearchTool: Tool = {
   schema: {
     name: 'WebSearch',
-    description: 'Search the web and return the top results (title, URL, snippet). Use WebFetch to read a result in full. Says so if the machine is offline.',
+    description: 'Search the web and return the top results (title, URL, snippet). You DO have internet access through this tool — call it to look anything up; never claim you cannot access the web. Use WebFetch to read a result in full. It reports if the machine is actually offline.',
     parameters: {
       type: 'object',
       properties: { query: { type: 'string' } },
@@ -113,6 +135,8 @@ export const webFetchTool: Tool = {
   async run(args, ctx) {
     let url = String(args.url)
     if (!/^https?:\/\//i.test(url)) url = `https://${url}`
+    const blocked = ssrfBlocked(url)
+    if (blocked) return blocked
     try {
       const res = await fetchWithTimeout(url, 15000, false, ctx.signal)
       if (!res.ok) return `Error: ${url} returned HTTP ${res.status}`

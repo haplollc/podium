@@ -18,12 +18,12 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('Read, Write, Bash')
   })
 
-  it('tells the model it HAS web access when WebSearch is available', () => {
-    const withWeb = buildSystemPrompt({ cwd: '/p', os: 'darwin', toolNames: ['Read', 'WebSearch', 'WebFetch'] })
-    expect(withWeb.toLowerCase()).toContain('internet access')
-    expect(withWeb).toContain('WebSearch')
-    const withoutWeb = buildSystemPrompt({ cwd: '/p', os: 'darwin', toolNames: ['Read', 'Bash'] })
-    expect(withoutWeb.toLowerCase()).not.toContain('internet access')
+  it('stays lean — no contradictory ALL-CAPS nudge blocks in the global prompt', () => {
+    const p = buildSystemPrompt({ cwd: '/p', os: 'darwin', toolNames: ['Read', 'WebSearch', 'Bash', 'TodoWrite'] })
+    // Caveats now live in tool descriptions, not the system prompt.
+    expect(p).not.toContain('NEVER')
+    expect(p).not.toContain('CRITICAL')
+    expect(p.length).toBeLessThan(2400)
   })
 
   it('includes optional memory, skill listing, and plan-mode sections', () => {
@@ -170,7 +170,7 @@ describe('runTurn', () => {
     const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
     cm.add({ role: 'user', content: 'loop' })
     const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys', maxSteps: 3 })
-    expect(out).toBe('')           // never produced a final text
+    expect(out).toBe('Done.')      // empty-output guard: work happened, so not blank
     expect(calls.length).toBe(3)   // exactly maxSteps tool executions
   })
 })

@@ -185,7 +185,12 @@ export function App(): React.ReactElement {
     return runTurn({
       provider, model: cfg.model, cm: cm2, tools: baseTools,
       systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: baseTools.map(t => t.schema.name) }),
-      numCtx: cfg.contextSize, keepAlive: KEEP_ALIVE, mode: 'default', todos: todoStore,
+      numCtx: cfg.contextSize, keepAlive: KEEP_ALIVE,
+      mode: (yoloRef.current ? 'yolo' : (cfg.mode ?? 'default')) as PermissionMode,
+      todos: todoStore,
+      // Subagents must honor the same permission + hook gates as the main loop.
+      onPermissionAsk: askPermission,
+      preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
     })
   }
 

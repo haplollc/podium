@@ -7,7 +7,7 @@ const MARK: Record<TodoItem['status'], string> = {
 export const todoTool: Tool = {
   schema: {
     name: 'TodoWrite',
-    description: 'Track a structured task list for multi-step work. Pass the FULL list every call (it replaces the previous one). Use for tasks of 3+ steps; mark one item in_progress at a time.',
+    description: 'Track a structured task list for multi-step work (3+ steps). Pass the FULL list every call (it replaces the previous one); mark one item in_progress at a time. This only TRACKS progress — it does NOT perform any step. To create a file you must call Write; to run something you must call Bash. Do not mark an item completed unless you actually did it with the real tool.',
     parameters: {
       type: 'object',
       properties: {

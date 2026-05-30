@@ -8,6 +8,8 @@ export interface ChatMessage {
   content: string
   tool_calls?: ToolCall[]
   tool_call_id?: string
+  /** For role:'tool' — the tool name (Ollama associates results by name). */
+  name?: string
 }
 export interface ToolCall { id: string; name: string; arguments: Record<string, unknown> }
 
