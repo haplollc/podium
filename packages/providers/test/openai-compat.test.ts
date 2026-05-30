@@ -40,6 +40,32 @@ describe('OpenAICompatProvider', () => {
     expect(events.at(-1)?.type).toBe('done')
   })
 
+  it('chat() preserves multiline Write content in fragmented tool arguments', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sse([
+      JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'Write' } }] } }] }),
+      JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"file_path":"todo.py",' } }] } }] }),
+      JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"content":"print(1)\nprint(2)\n"}' } }] } }] }),
+      '[DONE]',
+    ])))
+    const p = new OpenAICompatProvider('lmstudio', 'http://localhost:1234/v1')
+    const events: Array<{ type: string }> = []
+    for await (const e of p.chat({ model: 'm', messages: [] })) events.push(e)
+    const call = events.find((e): e is { type: 'tool_call'; call: { arguments: Record<string, unknown> } } => e.type === 'tool_call')
+    expect(call?.call.arguments.content).toBe('print(1)\nprint(2)\n')
+  })
+
+  it('chat() marks malformed stringified tool arguments instead of dropping them', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sse([
+      JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'Write', arguments: 'not-json' } }] } }] }),
+      '[DONE]',
+    ])))
+    const p = new OpenAICompatProvider('lmstudio', 'http://localhost:1234/v1')
+    const events: Array<{ type: string }> = []
+    for await (const e of p.chat({ model: 'm', messages: [] })) events.push(e)
+    const call = events.find((e): e is { type: 'tool_call'; call: { arguments: Record<string, unknown> } } => e.type === 'tool_call')
+    expect(call?.call.arguments.__parse_error).toMatch(/not valid JSON/)
+  })
+
   it('chat() tolerates multi-line SSE data events', async () => {
     const body = 'data: {"choices":[\ndata: {"delta":{"content":"Hello"}}\ndata: ]}\n\ndata: [DONE]\n\n'
     vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 200 })))

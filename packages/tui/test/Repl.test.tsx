@@ -70,6 +70,28 @@ describe('Repl', () => {
     expect(f).toContain('Loading model…')
   })
 
+  it('keeps prose with code fences visible while streaming', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={() => {}} busy={true}
+        streaming={'I will write this:\n```ts\nconsole.log(1)\n```'}
+      />,
+    )
+    expect(lastFrame()).toContain('console.log')
+  })
+
+  it('hides raw text-emitted tool calls from the live preview', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={() => {}} busy={true}
+        streaming={'{"name":"Write","arguments":{"file_path":"x","content":"y"}}'}
+      />,
+    )
+    expect(lastFrame()).not.toContain('file_path')
+  })
+
   it('keeps working notes in the transcript', () => {
     const { lastFrame } = render(
       <Repl

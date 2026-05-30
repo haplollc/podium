@@ -18,6 +18,7 @@ import { runSlash, type SlashCtx } from './slash-handlers.js'
 import { loadHooks, runHooks, type HookConfig } from './hooks.js'
 import { toolLabel, toolActivity, toolStartNote, toolResultNote } from './tool-label.js'
 import { ensureOllama, type EnsureResult } from './backend.js'
+import { groupQueuedInputs } from './queue.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -56,6 +57,7 @@ export function App(): React.ReactElement {
   const KEEP_ALIVE = '30m'
 
   const cmRef = useRef<ContextManager | null>(null)
+  const cfgRef = useRef<PodiumConfig | null>(null)
   const todosRef = useRef<TodoItem[]>([])
   const planRef = useRef(false)
   const registryRef = useRef<SkillRegistry>(new SkillRegistry(builtinSkills))
@@ -69,6 +71,7 @@ export function App(): React.ReactElement {
   const busyRef = useRef(false)                     // stale-closure-safe mirror of `busy`
 
   function setBusyBoth(v: boolean) { busyRef.current = v; setBusy(v) }
+  function setCfgBoth(v: PodiumConfig | null) { cfgRef.current = v; setCfg(v) }
 
   const todoStore: TodoStore = {
     set: (items) => { todosRef.current = items; setTodos(items) },
@@ -84,7 +87,7 @@ export function App(): React.ReactElement {
         loadSoul(process.cwd(), os.homedir()),
         loadHooks(),
       ])
-      setSys(s); setCatalog(c); setCfg(existing)
+      setSys(s); setCatalog(c); setCfgBoth(existing)
       registryRef.current = new SkillRegistry(mergeSkills(skillMetas, builtinSkills))
       memoryRef.current = mem
       soulRef.current = soul
@@ -125,19 +128,20 @@ export function App(): React.ReactElement {
   /** Build a live metrics snapshot (system RAM + model resident memory + tok/s). */
   async function refreshMetrics() {
     const cm = cmRef.current
-    if (!cm || !cfg) return
+    const config = cfgRef.current
+    if (!cm || !config) return
     const total = os.totalmem() / 1024 ** 3
     const ramUsedGB = (os.totalmem() - os.freemem()) / 1024 ** 3
     let modelMemGB: number | null = null
     try {
       const loaded = (await provider.ps?.()) ?? []
-      const me = loaded.find(x => x.name === cfg.model) ?? loaded[0]
+      const me = loaded.find(x => x.name === config.model) ?? loaded[0]
       if (me) modelMemGB = me.sizeBytes / 1024 ** 3
     } catch { /* backend may not support /api/ps */ }
     const start = genStartRef.current
     const tokensPerSec = start ? (genCharsRef.current / 4) / Math.max(0.001, (Date.now() - start) / 1000) : null
     setMetricsData({
-      model: cfg.model, contextStats: cm.stats(), modelMemGB,
+      model: config.model, contextStats: cm.stats(), modelMemGB,
       ramUsedGB, ramTotalGB: Math.round(total), tokensPerSec,
     })
   }
@@ -159,13 +163,15 @@ export function App(): React.ReactElement {
   async function onWizardComplete(r: { model: string; contextSize: number }) {
     const next: PodiumConfig = { backend: 'ollama', model: r.model, contextSize: r.contextSize, mode: 'default' }
     await saveConfig(next)
-    setCfg(next); initRepl(next); setScreen('repl')
+    setCfgBoth(next); initRepl(next); setScreen('repl')
     void warmModel(next.model)
   }
 
   async function summarize(prompt: string): Promise<string> {
+    const config = cfgRef.current
+    if (!config) return ''
     let out = ''
-    for await (const ev of provider.chat({ model: cfg!.model, numCtx: cfg!.contextSize, messages: [{ role: 'user', content: prompt }] })) {
+    for await (const ev of provider.chat({ model: config.model, numCtx: config.contextSize, messages: [{ role: 'user', content: prompt }] })) {
       if (ev.type === 'text') out += ev.delta
     }
     return out
@@ -187,14 +193,15 @@ export function App(): React.ReactElement {
   }
 
   async function spawnAgent(prompt: string): Promise<string> {
-    if (!cfg) return 'Error: not configured.'
-    const cm2 = new ContextManager({ window: cfg.contextSize, outputReserve: 2000 })
+    const config = cfgRef.current
+    if (!config) return 'Error: not configured.'
+    const cm2 = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
     cm2.add({ role: 'user', content: prompt })
     return runTurn({
-      provider, model: cfg.model, cm: cm2, tools: baseTools,
+      provider, model: config.model, cm: cm2, tools: baseTools,
       systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: baseTools.map(t => t.schema.name) }),
-      numCtx: cfg.contextSize, keepAlive: KEEP_ALIVE,
-      mode: (yoloRef.current ? 'yolo' : (cfg.mode ?? 'default')) as PermissionMode,
+      numCtx: config.contextSize, keepAlive: KEEP_ALIVE,
+      mode: (yoloRef.current ? 'yolo' : (config.mode ?? 'default')) as PermissionMode,
       todos: todoStore,
       // Subagents must honor the same permission + hook gates as the main loop.
       onPermissionAsk: askPermission,
@@ -211,7 +218,8 @@ export function App(): React.ReactElement {
   /** Run one agent turn over the given user content; returns the final reply. */
   async function runAgentTurn(userContent: string, showAssistant: boolean): Promise<string> {
     const cm = cmRef.current
-    if (!cm || !cfg) return ''
+    const config = cfgRef.current
+    if (!cm || !config) return ''
     cm.add({ role: 'user', content: userContent })
     const controller = new AbortController()
     abortRef.current = controller
@@ -225,12 +233,12 @@ export function App(): React.ReactElement {
     push({ role: 'note', text: 'Hmm, let me get oriented and pick the next useful step.' })
     try {
       const reply = await runTurn({
-        provider, model: cfg.model, cm, tools: allTools,
+        provider, model: config.model, cm, tools: allTools,
         systemPrompt: systemPrompt(),
-        numCtx: cfg.contextSize,
+        numCtx: config.contextSize,
         keepAlive: KEEP_ALIVE,
         signal: controller.signal,
-        mode: (yoloRef.current ? 'yolo' : (cfg.mode ?? 'default')) as PermissionMode,
+        mode: (yoloRef.current ? 'yolo' : (config.mode ?? 'default')) as PermissionMode,
         planMode: planRef.current,
         todos: todoStore,
         skills: registryRef.current,
@@ -276,8 +284,9 @@ export function App(): React.ReactElement {
   const slashCtx: SlashCtx = {
     stats: () => cmRef.current?.stats() ?? stats,
     clear: () => {
-      if (!cfg) return
-      const mgr = new ContextManager({ window: cfg.contextSize, outputReserve: 2000 })
+      const config = cfgRef.current
+      if (!config) return
+      const mgr = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
       cmRef.current = mgr
       setTranscript([]); setStats(mgr.stats())
     },
@@ -334,14 +343,7 @@ export function App(): React.ReactElement {
       const items = queuedRef.current
       queuedRef.current = []
       setQueued([])
-      const groups: string[] = []
-      let buf: string[] = []
-      for (const it of items) {
-        if (parseSlash(it)) { if (buf.length) { groups.push(buf.join('\n\n')); buf = [] } groups.push(it) }
-        else buf.push(it)
-      }
-      if (buf.length) groups.push(buf.join('\n\n'))
-      for (const g of groups) await runUserInput(g)
+      for (const group of groupQueuedInputs(items)) await runUserInput(group)
     }
   }
 
@@ -351,7 +353,7 @@ export function App(): React.ReactElement {
   }
 
   async function onSubmit(text: string) {
-    if (!cmRef.current || !cfg || !sys) return
+    if (!cmRef.current || !cfgRef.current || !sys) return
     if (busyRef.current) { onQueue(text); return }
     await runUserInput(text)
     await drainQueue()

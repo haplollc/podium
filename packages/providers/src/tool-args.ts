@@ -1,10 +1,12 @@
 export function coerceToolArguments(value: unknown): Record<string, unknown> {
   let args = value
   if (typeof args === 'string') {
+    if (args.trim() === '') return {}
     const parsed = tolerantParse(args)
-    if (parsed !== undefined) args = parsed
+    if (parsed === undefined) return parseErrorArgs('Tool arguments were not valid JSON.')
+    args = parsed
   }
-  return isRecord(args) ? args : {}
+  return isRecord(args) ? args : parseErrorArgs('Tool arguments must be a JSON object.')
 }
 
 export function streamError(value: unknown): string | undefined {
@@ -40,4 +42,8 @@ function escapeRawControlInStrings(s: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parseErrorArgs(message: string): Record<string, unknown> {
+  return { __parse_error: message }
 }

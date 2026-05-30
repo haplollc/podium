@@ -61,6 +61,32 @@ describe('OllamaProvider streaming', () => {
     expect(calls[0].arguments).toEqual({ file_path: '/x' })
   })
 
+  it('chat() preserves multiline Write content in stringified arguments', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ndjson([
+      { message: { tool_calls: [{ function: { name: 'Write', arguments: '{"file_path":"todo.py","content":"print(1)\nprint(2)\n"}' } }] } },
+      { done: true },
+    ])))
+    const p = new OllamaProvider()
+    const calls: Array<{ arguments: Record<string, unknown> }> = []
+    for await (const e of p.chat({ model: 'm', messages: [] })) {
+      if (e.type === 'tool_call') calls.push(e.call)
+    }
+    expect(calls[0].arguments.content).toBe('print(1)\nprint(2)\n')
+  })
+
+  it('chat() marks malformed stringified arguments instead of dropping them', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ndjson([
+      { message: { tool_calls: [{ function: { name: 'Write', arguments: 'not-json' } }] } },
+      { done: true },
+    ])))
+    const p = new OllamaProvider()
+    const calls: Array<{ arguments: Record<string, unknown> }> = []
+    for await (const e of p.chat({ model: 'm', messages: [] })) {
+      if (e.type === 'tool_call') calls.push(e.call)
+    }
+    expect(calls[0].arguments.__parse_error).toMatch(/not valid JSON/)
+  })
+
   it('chat() surfaces Ollama stream errors', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ndjson([{ error: 'model not found' }])))
     const p = new OllamaProvider()

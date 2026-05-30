@@ -116,6 +116,26 @@ describe('runTurn', () => {
     expect(out).toBe('all done')
   })
 
+  it('persists narration that precedes a tool call via onStepText', async () => {
+    const calls: string[] = []
+    const stepTexts: string[] = []
+    const provider = fakeProvider([
+      [
+        { type: 'text', delta: 'I will inspect the file first.' },
+        { type: 'tool_call', call: { id: '1', name: 'Echo', arguments: { value: 'hi' } } },
+        { type: 'done' },
+      ],
+      [{ type: 'text', delta: 'done' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'please echo hi' })
+    await runTurn({
+      provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys',
+      onStepText: t => stepTexts.push(t),
+    })
+    expect(stepTexts).toEqual(['I will inspect the file first.'])
+  })
+
   it('returns immediately when the model emits no tool calls', async () => {
     const provider = fakeProvider([[{ type: 'text', delta: 'just text' }, { type: 'done' }]])
     const cm = new ContextManager({ window: 8192, outputReserve: 2000 })

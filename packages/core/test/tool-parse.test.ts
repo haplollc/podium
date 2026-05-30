@@ -47,6 +47,13 @@ describe('extractToolCalls', () => {
     expect(calls[0].arguments).toEqual({ command: 'ls' })
   })
 
+  it('marks malformed stringified arguments instead of silently dropping them', () => {
+    const text = '{"name":"Write","arguments":"not-json"}'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].arguments.__parse_error).toMatch(/not valid JSON/)
+  })
+
   it('parses common local-model aliases for tool name and input', () => {
     const text = '{"tool":"Read","input":{"path":"README.md"}}'
     const { calls } = extractToolCalls(text, KNOWN)
@@ -97,6 +104,13 @@ describe('extractToolCalls', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].name).toBe('Write')
     expect(String(calls[0].arguments.content)).toContain('print(1)')
+  })
+
+  it('preserves markdown/code-fence content inside Write arguments', () => {
+    const text = '{"name":"Write","arguments":{"file_path":"README.md","content":"# Title\\n\\n```ts\\nconsole.log(1)\\n```\\n"}}'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(String(calls[0].arguments.content)).toContain('```ts')
+    expect(String(calls[0].arguments.content)).toContain('console.log(1)')
   })
 
   it('still extracts the Write when followed by Bash calls (multi-line content)', () => {

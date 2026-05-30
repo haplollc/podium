@@ -42,6 +42,21 @@ describe('file tools', () => {
     expect(await readFile(f, 'utf8')).toBe('x')
   })
 
+  it('write refuses empty/whitespace content without creating the file', async () => {
+    const f = path.join(dir, 'empty.py')
+    const out = await writeTool.run({ file_path: f, content: '   \n\n' }, { cwd: dir })
+    expect(out).toMatch(/empty content/i)
+    await expect(readFile(f, 'utf8')).rejects.toThrow()
+  })
+
+  it('write refuses empty/whitespace content without overwriting an existing file', async () => {
+    const f = path.join(dir, 'existing.py')
+    await writeFile(f, 'keep me')
+    const out = await writeTool.run({ file_path: f, content: '   ' }, { cwd: dir })
+    expect(out).toMatch(/empty content/i)
+    expect(await readFile(f, 'utf8')).toBe('keep me')
+  })
+
   it('file tools accept common local-model path aliases', async () => {
     const f = path.join(dir, 'alias.txt')
     await writeTool.run({ path: f, text: 'hello alias' }, { cwd: dir })
@@ -54,6 +69,11 @@ describe('file tools', () => {
   it('file tools fail clearly when required arguments are missing', async () => {
     await expect(readTool.run({}, { cwd: dir })).rejects.toThrow(/Missing required argument "file_path"/)
     await expect(writeTool.run({ file_path: path.join(dir, 'x') }, { cwd: dir })).rejects.toThrow(/Missing required argument "content"/)
+  })
+
+  it('file tools surface argument parse failures clearly', async () => {
+    await expect(writeTool.run({ __parse_error: 'Tool arguments were not valid JSON.' }, { cwd: dir }))
+      .rejects.toThrow(/not valid JSON/)
   })
 
   it('edit replaces a unique string and errors on non-unique', async () => {
@@ -80,14 +100,5 @@ describe('file tools', () => {
     expect(await readFile(f, 'utf8')).toBe('b b b')
     expect(res).toContain('Edited e.txt')
     expect(res).toContain('+ b b b')
-  })
-})
-
-import { writeTool as _wt } from '../src/write.js'
-describe('Write empty-content guard', () => {
-  it('refuses empty/whitespace content instead of writing a blank file', async () => {
-    const d = await import('node:fs/promises').then(m => m.mkdtemp(require('node:path').join(require('node:os').tmpdir(), 'w-')))
-    const out = await _wt.run({ file_path: require('node:path').join(d, 'x.py'), content: '   \n\n' }, { cwd: d })
-    expect(out).toMatch(/empty content/i)
   })
 })

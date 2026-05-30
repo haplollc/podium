@@ -13,7 +13,7 @@ export interface ParsedTools {
  */
 export function extractToolCalls(text: string, knownNames: string[]): ParsedTools {
   const known = new Set(knownNames)
-  const values = findJsonValues(stripFences(text))
+  const values = findJsonValues(text)
   const calls: ToolCall[] = []
   let cleaned = text
   let idx = 0
@@ -48,10 +48,6 @@ export function stripSpecialTokens(text: string): string {
   return text
     .replace(/<\|[^|>]*\|>/g, '')          // <|im_start|>, <|im_end|>, <|eot_id|>, …
     .replace(/<\/?(s|assistant|user|system)>/gi, '') // stray role/BOS tags
-}
-
-function stripFences(s: string): string {
-  return s.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '')
 }
 
 /** Find top-level balanced JSON object/array substrings that parse, quote-aware. */
@@ -102,10 +98,12 @@ function toolCallsFromValue(value: unknown, known: Set<string>, nextIndex: () =>
 function coerceArguments(value: unknown): Record<string, unknown> {
   let args = value
   if (typeof args === 'string') {
+    if (args.trim() === '') return {}
     const parsed = tolerantParse(args)
-    if (parsed !== undefined) args = parsed
+    if (parsed === undefined) return parseErrorArgs('Tool arguments were not valid JSON.')
+    args = parsed
   }
-  return isRecord(args) ? args : {}
+  return isRecord(args) ? args : parseErrorArgs('Tool arguments must be a JSON object.')
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -115,6 +113,10 @@ function firstString(...values: unknown[]): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parseErrorArgs(message: string): Record<string, unknown> {
+  return { __parse_error: message }
 }
 
 /**
