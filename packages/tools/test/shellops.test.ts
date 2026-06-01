@@ -83,3 +83,19 @@ describe('normalizePython', () => {
     expect(c).toBe('ls')
   })
 })
+
+import { mkdir as _mkdir, writeFile as _wf } from 'node:fs/promises'
+describe('Glob ignores heavy dirs', () => {
+  it('skips node_modules / .git when matching **/*', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises')
+    const os = await import('node:os'); const p = await import('node:path')
+    const d = await mkdtemp(p.join(os.tmpdir(), 'glob-'))
+    await _mkdir(p.join(d, 'node_modules', 'pkg'), { recursive: true })
+    await _wf(p.join(d, 'node_modules', 'pkg', 'index.js'), '')
+    await _wf(p.join(d, 'app.ts'), '')
+    const out = await globTool.run({ pattern: '**/*' }, { cwd: d })
+    expect(out).toContain('app.ts')
+    expect(out).not.toContain('node_modules')
+    await rm(d, { recursive: true, force: true })
+  })
+})
