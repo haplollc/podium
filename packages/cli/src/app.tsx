@@ -19,6 +19,8 @@ import { loadHooks, runHooks, type HookConfig } from './hooks.js'
 import { toolLabel, toolActivity, toolStartNote, toolResultNote } from './tool-label.js'
 import { ensureOllama, type EnsureResult } from './backend.js'
 import { groupQueuedInputs } from './queue.js'
+import { session } from './session.js'
+import { resolveAttachments, buildAttachedMessage } from './attachments.js'
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -69,6 +71,7 @@ export function App(): React.ReactElement {
   const yoloRef = useRef(false)                     // skip permission prompts
   const abortRef = useRef<AbortController | null>(null) // cancels the active turn
   const busyRef = useRef(false)                     // stale-closure-safe mirror of `busy`
+  const visionCacheRef = useRef<Map<string, boolean>>(new Map())  // model → supports images
 
   function setBusyBoth(v: boolean) { busyRef.current = v; setBusy(v) }
   function setCfgBoth(v: PodiumConfig | null) { cfgRef.current = v; setCfg(v) }
@@ -93,6 +96,11 @@ export function App(): React.ReactElement {
       soulRef.current = soul
       hooksRef.current = hooks
       void runHooks(hooks, 'SessionStart', { cwd: process.cwd() })
+      // On exit (Ctrl+C / quit / terminal-close) evict the model so the GPU is freed.
+      session.unload = async () => {
+        const m = cfgRef.current?.model
+        if (m && provider.unload) await provider.unload(m)
+      }
 
       // One-command onboarding: make sure the backend is up (install/start Ollama if needed).
       const ensured = await ensureOllama(provider, setBootStatus)
@@ -216,11 +224,11 @@ export function App(): React.ReactElement {
   }
 
   /** Run one agent turn over the given user content; returns the final reply. */
-  async function runAgentTurn(userContent: string, showAssistant: boolean): Promise<string> {
+  async function runAgentTurn(userContent: string, showAssistant: boolean, images?: string[]): Promise<string> {
     const cm = cmRef.current
     const config = cfgRef.current
     if (!cm || !config) return ''
-    cm.add({ role: 'user', content: userContent })
+    cm.add({ role: 'user', content: userContent, images: images?.length ? images : undefined })
     const controller = new AbortController()
     abortRef.current = controller
     setBusyBoth(true)
@@ -327,9 +335,37 @@ export function App(): React.ReactElement {
       push({ role: 'assistant', text: msg })
       return
     }
-    push({ role: 'user', text })
-    await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: text })
-    await runAgentTurn(text, true)
+
+    // Attachments: dragged/typed file paths become context (text files) or images.
+    const { attachments, cleanedText } = await resolveAttachments(text, process.cwd())
+    let content = text
+    let images: string[] = []
+    if (attachments.length) {
+      const built = buildAttachedMessage(cleanedText, attachments)
+      content = built.content
+      images = built.images
+      push({ role: 'user', text: cleanedText || '(attached files)' })
+      for (const a of attachments) push({ role: 'note', text: `Attached ${a.note}` })
+      if (images.length && !(await isVisionModel())) {
+        push({ role: 'note', text: `Note: ${cfgRef.current?.model} can't see images. Use /model to pick a vision model (e.g. qwen2.5-vl, llava). Sending text only.` })
+        images = []
+      }
+    } else {
+      push({ role: 'user', text })
+    }
+    await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: content })
+    await runAgentTurn(content, true, images)
+  }
+
+  /** Cached check: does the active model support image input? */
+  async function isVisionModel(): Promise<boolean> {
+    const model = cfgRef.current?.model
+    if (!model) return false
+    if (visionCacheRef.current.has(model)) return visionCacheRef.current.get(model)!
+    let vision = false
+    try { vision = (await provider.capabilities(model)).vision ?? false } catch { /* assume no */ }
+    visionCacheRef.current.set(model, vision)
+    return vision
   }
 
   /**

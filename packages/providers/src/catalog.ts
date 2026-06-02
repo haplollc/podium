@@ -11,6 +11,7 @@ export interface CatalogModel {
   kvPerKTokenGB: number
   defaultContext: number
   tools: boolean
+  vision?: boolean
   minTierGB: number
   recommendedForGB: number[]
 }

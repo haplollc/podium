@@ -1,7 +1,7 @@
 export interface LocalModel { name: string; sizeBytes: number }
 export interface RunningModel { name: string; sizeBytes: number; sizeVramBytes: number }
 export interface PullProgress { status: string; completed?: number; total?: number }
-export interface ModelCapabilities { tools: boolean; contextLength?: number }
+export interface ModelCapabilities { tools: boolean; vision?: boolean; contextLength?: number }
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -10,6 +10,8 @@ export interface ChatMessage {
   tool_call_id?: string
   /** For role:'tool' — the tool name (Ollama associates results by name). */
   name?: string
+  /** Base64 images attached to a user message (vision models only). */
+  images?: string[]
 }
 export interface ToolCall { id: string; name: string; arguments: Record<string, unknown> }
 
@@ -51,4 +53,6 @@ export interface Provider {
   remove?(model: string): Promise<void>
   /** Optional: list currently-loaded models and their memory footprint. */
   ps?(): Promise<RunningModel[]>
+  /** Optional: evict a model from memory/GPU immediately (free resources on exit). */
+  unload?(model: string): Promise<void>
 }

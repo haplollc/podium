@@ -49,6 +49,17 @@ export class OllamaProvider implements Provider {
     } catch { /* best-effort warmup */ }
   }
 
+  /** Evict a model from memory/GPU immediately (keep_alive:0). Frees the GPU on exit. */
+  async unload(model: string): Promise<void> {
+    try {
+      await fetch(`${this.base}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model, keep_alive: 0 }),
+      })
+    } catch { /* best-effort */ }
+  }
+
   /** Currently-loaded models and their memory footprint (GET /api/ps). */
   async ps(): Promise<{ name: string; sizeBytes: number; sizeVramBytes: number }[]> {
     const r = await fetch(`${this.base}/api/ps`)
@@ -76,6 +87,7 @@ export class OllamaProvider implements Provider {
     const ctxKey = Object.keys(data.model_info ?? {}).find(k => k.endsWith('context_length'))
     return {
       tools: (data.capabilities ?? []).includes('tools'),
+      vision: (data.capabilities ?? []).includes('vision'),
       contextLength: ctxKey ? data.model_info![ctxKey] : undefined,
     }
   }
@@ -90,6 +102,7 @@ export class OllamaProvider implements Provider {
           role: m.role,
           content: m.content,
           ...(m.role === 'tool' && m.name ? { tool_name: m.name } : {}),
+          ...(m.images?.length ? { images: m.images } : {}),
           tool_calls: m.tool_calls?.map(tc => ({ function: { name: tc.name, arguments: tc.arguments } })),
         })),
         tools: req.tools?.map(t => ({ type: 'function', function: t })),

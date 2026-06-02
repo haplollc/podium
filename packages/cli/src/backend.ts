@@ -37,7 +37,13 @@ export async function ensureOllama(provider: Provider, onStatus: (s: string) => 
 
   onStatus('Starting Ollama…')
   try {
-    spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' }).unref()
+    // Flash attention + quantized KV cache cut memory/compute (and heat) noticeably
+    // on Apple Silicon. Only applies when WE start the server.
+    spawn('ollama', ['serve'], {
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, OLLAMA_FLASH_ATTENTION: '1', OLLAMA_KV_CACHE_TYPE: 'q8_0' },
+    }).unref()
   } catch {
     return { running: false, reason: 'start-failed' }
   }
