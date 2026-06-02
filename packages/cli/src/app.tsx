@@ -361,6 +361,10 @@ export function App(): React.ReactElement {
         spawnAgent,
         exitPlan,
         snapshot: snapshotFile,
+        onAutoCompact: () => {
+          setStatus('Context full — compacting…')
+          push({ role: 'note', text: '🗜 Auto-compacting the conversation to free up context…' })
+        },
         onModelStart: () => setStatus('Thinking…'),
         onText: (delta) => { genCharsRef.current += delta.length; setStreaming(s => s + delta) },
         onStepText: (t) => push({ role: 'assistant', text: t }),
@@ -567,8 +571,6 @@ export function App(): React.ReactElement {
 
   return (
     <Box flexDirection="column">
-      {planMode && <Text color="magenta">— PLAN MODE (read-only) —</Text>}
-      {yoloOn && <Text color="red">⚠ YOLO — skipping all permission prompts</Text>}
       <Repl
         stats={stats} transcript={transcript} onSubmit={onSubmit} busy={busy}
         streaming={streaming} status={status} commands={commandNames}
@@ -578,6 +580,7 @@ export function App(): React.ReactElement {
         model={cfg?.model ?? 'no model'} cwd={process.cwd()}
         history={history} queued={queued} onQueue={onQueue}
         inputActive={!rewinding && !pending && !soulProposal}
+        planMode={planMode} yolo={yoloOn}
       />
       {pending && (
         <PermissionPrompt

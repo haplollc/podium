@@ -50,6 +50,8 @@ export interface RunTurnOpts {
   temperature?: number
   /** Snapshot a file before a tool modifies it (enables /rewind). */
   snapshot?: (absPath: string) => Promise<void>
+  /** Fired when the loop auto-compacts mid-turn, so the UI can show it happening. */
+  onAutoCompact?: () => void
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -104,6 +106,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
   for (let step = 0; step < maxSteps; step++) {
     if (opts.signal?.aborted) break
     if (shouldCompact(cm.stats(), buffer)) {
+      opts.onAutoCompact?.()
       await compact(cm, {
         prefixCount: 1,
         summarize: async (prompt) => collectText(provider.chat({

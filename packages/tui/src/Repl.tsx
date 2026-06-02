@@ -39,6 +39,8 @@ export function Repl(props: {
   queued?: string[]             // messages queued while busy (shown above input)
   onQueue?: (text: string) => void  // called when Enter is pressed during a running turn
   inputActive?: boolean         // false while an overlay (rewind picker, permission) owns the keyboard
+  planMode?: boolean            // show a compact PLAN indicator in the footer
+  yolo?: boolean                // show a compact YOLO indicator in the footer
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
@@ -186,7 +188,14 @@ export function Repl(props: {
         </Box>
       )}
 
-      <Box marginTop={1}>
+      {(props.planMode || props.yolo) && (
+        <Box marginTop={1}>
+          {props.planMode && <Text color="magenta">PLAN MODE (read-only)  </Text>}
+          {props.yolo && <Text color="red">⚠ YOLO — no permission prompts</Text>}
+        </Box>
+      )}
+
+      <Box marginTop={props.planMode || props.yolo ? 0 : 1}>
         {props.metrics ? <MetricsBar m={props.metrics} /> : <ContextMeter stats={props.stats} />}
       </Box>
 

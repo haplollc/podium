@@ -204,7 +204,7 @@ describe('runTurn', () => {
     expect(toolMsgs.some(c => c.includes('kaboom'))).toBe(true)
   })
 
-  it('auto-compacts before stepping when context is near full', async () => {
+  it('auto-compacts before stepping when context is near full, and fires onAutoCompact', async () => {
     const provider = fakeProvider([
       [{ type: 'text', delta: 'SUMMARY of earlier work' }, { type: 'done' }], // the summarize call
       [{ type: 'text', delta: 'final answer' }, { type: 'done' }],            // the model step
@@ -212,10 +212,27 @@ describe('runTurn', () => {
     // Tiny window so shouldCompact() is true on the first step.
     const cm = new ContextManager({ window: 100, outputReserve: 10 })
     cm.add({ role: 'user', content: 'x'.repeat(2000) })
-    const out = await runTurn({ provider, model: 'm', cm, tools: [], systemPrompt: 'sys' })
+    let compactNotices = 0
+    const out = await runTurn({
+      provider, model: 'm', cm, tools: [], systemPrompt: 'sys',
+      onAutoCompact: () => { compactNotices++ },
+    })
     expect(out).toBe('final answer')
+    expect(compactNotices).toBeGreaterThan(0)             // the UI was told it happened
     const contents = cm.messages().map(m => m.content).join('\n')
     expect(contents).toContain('SUMMARY of earlier work') // earlier tail was replaced by the summary
+  })
+
+  it('does NOT auto-compact (or notify) when context is comfortably under the limit', async () => {
+    const provider = fakeProvider([[{ type: 'text', delta: 'hi' }, { type: 'done' }]])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'short' })
+    let compactNotices = 0
+    await runTurn({
+      provider, model: 'm', cm, tools: [], systemPrompt: 'sys',
+      onAutoCompact: () => { compactNotices++ },
+    })
+    expect(compactNotices).toBe(0)
   })
 
   it('stops at maxSteps even if the model keeps calling tools', async () => {

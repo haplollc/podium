@@ -35,7 +35,16 @@ export function MetricsBar({ m }: { m: MetricsData }): React.ReactElement {
   const podiumColor = podiumFrac > 0.6 ? 'red' : podiumFrac > 0.4 ? 'yellow' : 'green'
 
   return (
-    <Box borderStyle="round" borderColor="cyan" paddingX={1} flexDirection="column">
+    // Just a horizontal rule on top (no corners/side edges) so the rows line up
+    // flush-left with the input prompt below it.
+    <Box
+      flexDirection="column"
+      borderStyle="single"
+      borderColor="cyan"
+      borderBottom={false}
+      borderLeft={false}
+      borderRight={false}
+    >
       <Text>
         <Text dimColor>◆ </Text><Text bold>{m.model}</Text>
         {m.tokensPerSec != null ? <Text dimColor>  ·  {m.tokensPerSec.toFixed(0)} tok/s</Text> : ''}

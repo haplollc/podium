@@ -57,6 +57,21 @@ describe('Repl', () => {
     await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('/help'))
   })
 
+  it('shows a single compact YOLO indicator in the footer (not per-tool spam)', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[{ role: 'tool', text: 'Glob › **/*' }, { role: 'tool', text: 'Bash › ls' }]}
+        onSubmit={() => {}} busy={false} yolo planMode
+      />,
+    )
+    const f = lastFrame() ?? ''
+    expect(f).toContain('⚠ YOLO')
+    expect(f).toContain('PLAN MODE')
+    // exactly one YOLO line, regardless of how many tool entries are in the log
+    expect((f.match(/⚠ YOLO/g) ?? []).length).toBe(1)
+  })
+
   it('renders live streaming text and a status spinner while busy', () => {
     const { lastFrame } = render(
       <Repl
