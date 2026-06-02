@@ -13,6 +13,8 @@ export interface ToolContext {
   cwd: string
   /** Abort long-running tools (Bash, web) when the user stops the turn. */
   signal?: AbortSignal
+  /** Snapshot a file's current content before modifying it (enables /rewind). */
+  snapshot?: (absPath: string) => Promise<void>
   todos?: TodoStore
   skills?: ToolContextSkills
   /** Launch an isolated-context subagent; returns its concise final report. */

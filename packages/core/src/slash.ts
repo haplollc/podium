@@ -8,7 +8,7 @@ export function parseSlash(input: string): SlashCommand | null {
   return { name: t.slice(1, sp), args: t.slice(sp + 1).trim() }
 }
 
-export const BUILTIN_SLASH = ['model', 'models', 'pull', 'context', 'compact', 'clear', 'help'] as const
+export const BUILTIN_SLASH = ['model', 'models', 'pull', 'context', 'compact', 'rewind', 'clear', 'help'] as const
 export type BuiltinSlash = typeof BUILTIN_SLASH[number]
 
 export function isBuiltinSlash(name: string): name is BuiltinSlash {

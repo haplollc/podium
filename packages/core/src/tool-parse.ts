@@ -71,6 +71,13 @@ function findJsonValues(s: string): Array<{ raw: string; value: unknown }> {
   return out
 }
 
+// Keys that are part of the tool-call envelope, not the tool's actual arguments.
+const ENVELOPE_KEYS = new Set([
+  'name', 'tool', 'tool_name', 'action', 'function', 'type', 'id',
+  'arguments', 'parameters', 'input', 'args',
+  'tool_calls', 'tool_call', 'function_call', 'tool_use',
+])
+
 function toolCallsFromValue(value: unknown, known: Set<string>, nextIndex: () => number): ToolCall[] {
   if (Array.isArray(value)) return value.flatMap(v => toolCallsFromValue(v, known, nextIndex))
   if (!isRecord(value)) return []
@@ -87,7 +94,14 @@ function toolCallsFromValue(value: unknown, known: Set<string>, nextIndex: () =>
   const name = firstString(value.name, value.tool, value.tool_name, value.action, fn?.name)
   if (!name || !known.has(name)) return nestedCalls
 
-  const rawArgs = value.arguments ?? value.parameters ?? value.input ?? value.args ?? fn?.arguments ?? fn?.parameters ?? {}
+  let rawArgs = value.arguments ?? value.parameters ?? value.input ?? value.args ?? fn?.arguments ?? fn?.parameters
+  if (rawArgs === undefined) {
+    // No args wrapper — small models often inline params at the top level, e.g.
+    // {"name":"Bash","command":"ls"}. Treat the leftover keys as the arguments.
+    const leftover: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value)) if (!ENVELOPE_KEYS.has(k)) leftover[k] = v
+    rawArgs = leftover
+  }
   const args = coerceArguments(rawArgs)
   return [
     ...nestedCalls,

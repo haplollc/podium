@@ -15,8 +15,11 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     runSkill: vi.fn(async (n, a) => `running ${n} ${a}`),
     togglePlan: vi.fn(() => true),
     soul: () => 'be kind and concise',
+    updateSoul: vi.fn(async () => {}),
+    resetSoul: vi.fn(async () => {}),
     toggleMetrics: vi.fn(() => true),
     toggleYolo: vi.fn(() => true),
+    openRewind: vi.fn(() => null),
     ...over,
   }
 }
@@ -78,6 +81,18 @@ describe('runSlash', () => {
   it('soul shows the active personality', async () => {
     expect(await runSlash({ name: 'soul', args: '' }, ctx())).toContain('be kind and concise')
   })
+  it('soul <text> appends a preference', async () => {
+    const updateSoul = vi.fn(async () => {})
+    const out = await runSlash({ name: 'soul', args: 'be more concise' }, ctx({ updateSoul }))
+    expect(updateSoul).toHaveBeenCalledWith('be more concise')
+    expect(out).toContain('be more concise')
+  })
+  it('soul reset clears learned preferences', async () => {
+    const resetSoul = vi.fn(async () => {})
+    const out = await runSlash({ name: 'soul', args: 'reset' }, ctx({ resetSoul }))
+    expect(resetSoul).toHaveBeenCalled()
+    expect(out).toContain('reset')
+  })
   it('metrics toggles the dashboard', async () => {
     const toggleMetrics = vi.fn(() => true)
     expect(await runSlash({ name: 'metrics', args: '' }, ctx({ toggleMetrics }))).toContain('ON')
@@ -87,6 +102,15 @@ describe('runSlash', () => {
     const toggleYolo = vi.fn(() => true)
     expect(await runSlash({ name: 'yolo', args: '' }, ctx({ toggleYolo }))).toContain('YOLO ON')
     expect(toggleYolo).toHaveBeenCalled()
+  })
+  it('rewind opens the picker when possible', async () => {
+    const openRewind = vi.fn(() => null)
+    expect(await runSlash({ name: 'rewind', args: '' }, ctx({ openRewind }))).toContain('Opening rewind')
+    expect(openRewind).toHaveBeenCalled()
+  })
+  it('rewind surfaces the reason it can\'t open', async () => {
+    const openRewind = vi.fn(() => 'Nothing to rewind to yet')
+    expect(await runSlash({ name: 'rewind', args: '' }, ctx({ openRewind }))).toContain('Nothing to rewind to')
   })
   it('unknown command (not a skill) is reported', async () => {
     expect(await runSlash({ name: 'wat', args: '' }, ctx())).toContain('Unknown command')

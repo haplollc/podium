@@ -71,6 +71,21 @@ describe('extractToolCalls', () => {
     expect(cleanedText).toBe('')
   })
 
+  it('gathers top-level params when there is no arguments wrapper', () => {
+    // Small models often inline params: {"name":"Bash","command":"ls -la"}
+    const text = '{"name":"Bash","command":"ls -la"}'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].name).toBe('Bash')
+    expect(calls[0].arguments).toEqual({ command: 'ls -la' })
+  })
+
+  it('inlined params ignore envelope keys like type/id', () => {
+    const text = '{"type":"function","id":"abc","name":"Write","file_path":"a.txt","content":"hi"}'
+    const { calls } = extractToolCalls(text, KNOWN)
+    expect(calls[0].arguments).toEqual({ file_path: 'a.txt', content: 'hi' })
+  })
+
   it('parses an array of tool calls', () => {
     const text = '[{"name":"Read","arguments":{"file_path":"a"}},{"name":"Read","arguments":{"file_path":"b"}}]'
     const { calls } = extractToolCalls(text, KNOWN)

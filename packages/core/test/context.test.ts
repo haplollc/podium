@@ -12,6 +12,29 @@ describe('ContextManager', () => {
     expect(s.percentUsed).toBeCloseTo(s.used / s.effective, 5)
   })
 
+  it('length and truncateTo support /rewind to an earlier message', () => {
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'first' })
+    cm.add({ role: 'assistant', content: 'reply one' })
+    const mark = cm.length()                    // rewind point = before the 2nd turn
+    cm.add({ role: 'user', content: 'second' })
+    cm.add({ role: 'assistant', content: 'reply two' })
+    expect(cm.length()).toBe(4)
+    cm.truncateTo(mark)
+    expect(cm.length()).toBe(2)
+    expect(cm.messages().map(m => m.content)).toEqual(['first', 'reply one'])
+  })
+
+  it('truncateTo clamps out-of-range indices', () => {
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'a' })
+    cm.truncateTo(-5)
+    expect(cm.length()).toBe(0)
+    cm.add({ role: 'user', content: 'b' })
+    cm.truncateTo(99)                           // beyond end → no-op
+    expect(cm.length()).toBe(1)
+  })
+
   it('replaceWithSummary swaps the message list for a summary message', () => {
     const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
     cm.add({ role: 'user', content: 'a'.repeat(8000) })

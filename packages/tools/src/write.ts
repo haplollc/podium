@@ -28,6 +28,7 @@ export const writeTool: Tool = {
     if (content.trim() === '') {
       return `Error: Write was called with empty content for ${path.basename(file)}. Call Write again with the FULL file contents in the "content" field. (To create a deliberately empty file, use Bash: touch ${path.basename(file)}.)`
     }
+    await ctx.snapshot?.(file)   // record pre-edit state for /rewind
     await mkdir(path.dirname(file), { recursive: true })
     await writeFile(file, content)
     const verb = before ? 'Updated' : 'Created'

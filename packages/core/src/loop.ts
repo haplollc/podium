@@ -48,6 +48,8 @@ export interface RunTurnOpts {
   maxPromiseNudges?: number
   /** Sampling temperature for the agent turn. Default 0 (greedy) for reliable tool use. */
   temperature?: number
+  /** Snapshot a file before a tool modifies it (enables /rewind). */
+  snapshot?: (absPath: string) => Promise<void>
 }
 
 /** Heuristic: the model's text looks like a botched tool call (mentions a tool name inside JSON-ish braces). */
@@ -60,6 +62,21 @@ function looksLikeToolAttempt(text: string, schemas: { name: string }[]): boolea
 function looksLikePromise(text: string): boolean {
   return /\b(i'?ll|i am going to|i'?m going to|i will|let me|let'?s|now i'?ll|first,?\s*i'?ll|i'?m (searching|creating|writing|fetching|looking|going|running))\b/i.test(text)
     || /\b(let'?s (do|search|create|write|run)|going to (create|write|run|search|fetch|do)|searching the web|create the (script|file)|fetch (the|search))\b/i.test(text)
+}
+
+/**
+ * Heuristic: the model *showed* a shell command (a ```bash fence or a `$ cmd`
+ * line) but called no tool — so the command never ran. Common small-model
+ * failure behind "it wouldn't run my command". We only trip on an explicit
+ * shell language tag and short surrounding prose, so genuine "here's how"
+ * explanations with a long write-up don't get nudged.
+ */
+function looksLikeUnrunCommand(text: string): boolean {
+  const hasShellFence = /```(?:bash|sh|shell|zsh|console|shell-session)\b/i.test(text)
+  const hasPromptLine = /(^|\n)\s*\$ {1,}\S/.test(text)
+  if (!hasShellFence && !hasPromptLine) return false
+  const prose = text.replace(/```[\s\S]*?```/g, '').replace(/`[^`]*`/g, '').replace(/\s+/g, ' ').trim()
+  return prose.length < 280
 }
 
 /** Heuristic: the model refused with its trained "no internet/access" reflex instead of using a tool. */
@@ -137,6 +154,16 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         })
         continue
       }
+      // The model showed a shell command (in a code fence) but never called the
+      // Bash tool, so it didn't actually run. Push it to call the tool for real.
+      if (nudges < maxNudges && looksLikeUnrunCommand(assistantText)) {
+        nudges++
+        cm.add({
+          role: 'user',
+          content: 'You wrote a shell command but did not run it — printing it in a code block does NOT execute it. To actually run it you MUST call the Bash tool: reply with ONLY {"name": "Bash", "arguments": {"command": "<the exact command>"}} and nothing else.',
+        })
+        continue
+      }
       // The model either promised to act or refused ("I can't access the internet") without
       // calling a tool. Push it to actually use the tool it has.
       if (nudges < maxNudges && (looksLikePromise(assistantText) || looksLikeRefusal(assistantText))) {
@@ -191,6 +218,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
           ? await tool.run(call.arguments, {
               cwd: opts.cwd ?? process.cwd(),
               signal: opts.signal,
+              snapshot: opts.snapshot,
               todos: opts.todos,
               skills: opts.skills,
               spawnAgent: opts.spawnAgent,

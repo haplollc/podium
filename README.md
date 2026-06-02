@@ -118,7 +118,8 @@ your pick with a progress bar, and drops you into a REPL with a live context met
 | 📋 **Plan mode** | `/plan` flips to read-only; the agent investigates and proposes a plan before touching anything |
 | 🎚 **Permission modes** | `default` · `acceptEdits` · `plan` · `yolo`, with interactive y/n approval prompts |
 | 🧠 **Memory** | Hierarchical `PODIUM.md` / `CLAUDE.md` (user → project) |
-| ✨ **SOUL.md** | Give Podium a personality/voice — per-project or global |
+| ✨ **SOUL.md** | Give Podium a personality/voice — per-project or global. It also **learns durable preferences** ("always be concise") and asks before saving them |
+| ↩️ **Rewind** | `/rewind` jumps back to an earlier point in the conversation **and undoes the file changes** made since — pick a message, press Enter |
 | 🪝 **Hooks** | `SessionStart` · `UserPromptSubmit` · `PreToolUse` · `PreCompact` from `~/.podium/settings.json` |
 | 🌐 **Web** | `WebSearch` + `WebFetch` (website scanning) — and it tells you when you're offline instead of failing |
 | 🔌 **Multi-backend** | Ollama · LM Studio · MLX behind one interface, auto-detected |
@@ -134,10 +135,11 @@ Type `/` and a letter for an autocomplete dropdown.
 | `/models` | List installed models |
 | `/pull <name>` | Download a model |
 | `/skills` | List available skills |
-| `/soul` | Show Podium's current personality |
+| `/soul` | Show Podium's personality — `/soul <preference>` to add one, `/soul reset` to clear learned ones |
 | `/plan` | Toggle plan mode (read-only) |
 | `/context` | Show the context meter + token breakdown |
 | `/compact` | Summarize + shrink the conversation now |
+| `/rewind` | Step back to an earlier message and undo file changes since |
 | `/clear` | Reset the conversation |
 | `/<skill>` | Run a skill (e.g. `/commit`, `/review`) |
 

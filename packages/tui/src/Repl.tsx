@@ -38,6 +38,7 @@ export function Repl(props: {
   history?: string[]            // past prompts, oldest→newest (up/down to recall)
   queued?: string[]             // messages queued while busy (shown above input)
   onQueue?: (text: string) => void  // called when Enter is pressed during a running turn
+  inputActive?: boolean         // false while an overlay (rewind picker, permission) owns the keyboard
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
@@ -120,7 +121,7 @@ export function Repl(props: {
       return
     }
     setBoth(cur + chunk); setSelBoth(0); histIdxRef.current = -1
-  })
+  }, { isActive: props.inputActive ?? true })
 
   const menu = matchesFor(input)
 

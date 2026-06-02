@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import os from 'node:os'
+import { readFile, writeFile, rm } from 'node:fs/promises'
 import { Box, Text } from 'ink'
 import { computeSystemInfo, type SystemInfo } from '@podium/hardware'
 import { OllamaProvider, loadCatalog } from '@podium/providers'
@@ -10,10 +11,11 @@ import {
 } from '@podium/core'
 import { allTools, baseTools, type TodoItem, type TodoStore } from '@podium/tools'
 import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing, mergeSkills, builtinSkills } from '@podium/skills'
-import { SetupWizard, Repl, PermissionPrompt, type TranscriptEntry, type MetricsData } from '@podium/tui'
+import { SetupWizard, Repl, PermissionPrompt, RewindPicker, SoulPrompt, type TranscriptEntry, type MetricsData, type RewindEntry } from '@podium/tui'
 import { loadConfig, saveConfig, type PodiumConfig } from './config.js'
 import { loadMemory } from './memory.js'
-import { loadSoul, DEFAULT_SOUL } from './soul.js'
+import { loadSoul, DEFAULT_SOUL, addLearnedPreference, clearLearnedPreferences } from './soul.js'
+import { detectPreference } from './soul-learn.js'
 import { runSlash, type SlashCtx } from './slash-handlers.js'
 import { loadHooks, runHooks, type HookConfig } from './hooks.js'
 import { toolLabel, toolActivity, toolStartNote, toolResultNote } from './tool-label.js'
@@ -24,6 +26,14 @@ import { resolveAttachments, buildAttachedMessage } from './attachments.js'
 import { readTemperature, tempZone } from './sysinfo.js'
 
 const fmtTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
+
+/** A point we can rewind to: conversation length + lazily-captured pre-edit file contents. */
+interface Checkpoint {
+  id: string
+  label: string                       // the user message at this point
+  msgIndex: number                    // cm length before that message
+  files: Map<string, string | null>   // first-touch pre-edit content (null = didn't exist)
+}
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -75,6 +85,12 @@ export function App(): React.ReactElement {
   const abortRef = useRef<AbortController | null>(null) // cancels the active turn
   const busyRef = useRef(false)                     // stale-closure-safe mirror of `busy`
   const visionCacheRef = useRef<Map<string, boolean>>(new Map())  // model → supports images
+  const checkpointsRef = useRef<Checkpoint[]>([])   // rewind points since last compaction
+  const ckptIdRef = useRef(0)
+  const [rewinding, setRewinding] = useState(false)
+  const [soulProposal, setSoulProposal] = useState<string | null>(null)  // learned-pref awaiting confirm
+  const soulSeenRef = useRef<Set<string>>(new Set())  // lines already proposed/declined this session
+  const soulQueueRef = useRef<string[]>([])           // detected prefs waiting to be shown once idle
 
   function setBusyBoth(v: boolean) { busyRef.current = v; setBusy(v) }
   function setCfgBoth(v: PodiumConfig | null) { cfgRef.current = v; setCfg(v) }
@@ -135,6 +151,92 @@ export function App(): React.ReactElement {
   }
 
   function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
+
+  /** Record a rewind point just before a user turn. */
+  function newCheckpoint(label: string) {
+    checkpointsRef.current.push({
+      id: String(++ckptIdRef.current),
+      label,
+      msgIndex: cmRef.current?.length() ?? 0,
+      files: new Map(),
+    })
+  }
+
+  /** First-touch snapshot of a file's current content into the newest checkpoint. */
+  async function snapshotFile(abs: string) {
+    const cps = checkpointsRef.current
+    const cur = cps[cps.length - 1]
+    if (!cur || cur.files.has(abs)) return
+    let content: string | null
+    try { content = await readFile(abs, 'utf8') } catch { content = null }
+    cur.files.set(abs, content)
+  }
+
+  /** Build picker entries (newest first); fileCount = files undone by rewinding here. */
+  function rewindEntries(): RewindEntry[] {
+    const cps = checkpointsRef.current
+    return cps.map((cp, i) => {
+      const paths = new Set<string>()
+      for (let j = i; j < cps.length; j++) for (const p of cps[j].files.keys()) paths.add(p)
+      return { id: cp.id, label: cp.label, fileCount: paths.size }
+    }).reverse()
+  }
+
+  /** Restore conversation + files to the chosen checkpoint. */
+  async function rewindTo(id: string) {
+    setRewinding(false)
+    const cps = checkpointsRef.current
+    const idx = cps.findIndex(c => c.id === id)
+    if (idx < 0 || !cmRef.current) return
+    const target = cps[idx]
+    cmRef.current.truncateTo(target.msgIndex)
+    // Earliest-snapshot-wins across checkpoints idx..end gives the state as of `target`.
+    const restore = new Map<string, string | null>()
+    for (let i = idx; i < cps.length; i++) {
+      for (const [p, c] of cps[i].files) if (!restore.has(p)) restore.set(p, c)
+    }
+    let reverted = 0
+    for (const [p, content] of restore) {
+      try {
+        if (content === null) await rm(p, { force: true })
+        else await writeFile(p, content)
+        reverted++
+      } catch { /* best-effort */ }
+    }
+    checkpointsRef.current = cps.slice(0, idx)
+    setStats(cmRef.current.stats())
+    void refreshMetrics()
+    push({ role: 'output', text: `↩ Rewound to "${target.label.slice(0, 50)}" — undid ${cps.length - idx} message(s)${reverted ? ` and ${reverted} file change(s)` : ''}.` })
+  }
+
+  /** Persist a preference into SOUL.md and reload it into the live prompt. */
+  async function applySoul(line: string) {
+    const next = await addLearnedPreference(process.cwd(), os.homedir(), line)
+    soulRef.current = next
+    soulSeenRef.current.add(line.toLowerCase())
+  }
+
+  /** Apply a learned preference and announce it (used by the auto-evolution confirm). */
+  async function commitSoul(line: string) {
+    await applySoul(line)
+    push({ role: 'note', text: `✎ Updated my soul: "${line}"` })
+  }
+
+  /** Decide whether the user's message implies a durable preference, and enqueue a confirm if so. */
+  function maybeProposeSoul(userText: string) {
+    const line = detectPreference(userText)
+    if (!line) return
+    const key = line.toLowerCase()
+    if (soulSeenRef.current.has(key)) return                  // already asked/applied this session
+    if (soulRef.current.toLowerCase().includes(key)) return   // already in the soul
+    soulSeenRef.current.add(key)
+    soulQueueRef.current.push(line)
+  }
+
+  /** Show the next queued soul proposal, but only once nothing else is on screen. */
+  function pumpSoul() {
+    setSoulProposal(prev => (prev ? prev : soulQueueRef.current.shift() ?? null))
+  }
 
   /** Build a live metrics snapshot (system RAM + model resident memory + tok/s). */
   async function refreshMetrics() {
@@ -258,6 +360,7 @@ export function App(): React.ReactElement {
         skills: registryRef.current,
         spawnAgent,
         exitPlan,
+        snapshot: snapshotFile,
         onModelStart: () => setStatus('Thinking…'),
         onText: (delta) => { genCharsRef.current += delta.length; setStreaming(s => s + delta) },
         onStepText: (t) => push({ role: 'assistant', text: t }),
@@ -302,6 +405,7 @@ export function App(): React.ReactElement {
       if (!config) return
       const mgr = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
       cmRef.current = mgr
+      checkpointsRef.current = []
       setTranscript([]); setStats(mgr.stats())
     },
     compact: async () => {
@@ -315,6 +419,7 @@ export function App(): React.ReactElement {
       try {
         await runHooks(hooksRef.current, 'PreCompact', { reason: 'manual' })
         await compact(cm, { prefixCount: 1, summarize })
+        checkpointsRef.current = []   // msg indices are invalid after summarization
       } finally {
         setStatus('')
         setBusyBoth(false)
@@ -343,8 +448,20 @@ export function App(): React.ReactElement {
       return planRef.current
     },
     soul: () => soulRef.current,
+    updateSoul: async (text) => { await applySoul(text) },
+    resetSoul: async () => {
+      const next = await clearLearnedPreferences(process.cwd(), os.homedir())
+      soulRef.current = next
+      soulSeenRef.current.clear()
+    },
     toggleMetrics: () => { const next = !metricsOn; setMetricsOn(next); return next },
     toggleYolo: () => { yoloRef.current = !yoloRef.current; setYoloOn(yoloRef.current); return yoloRef.current },
+    openRewind: () => {
+      if (busyRef.current) return 'Can\'t rewind while a turn is running — press Esc to stop it first.'
+      if (!checkpointsRef.current.length) return 'Nothing to rewind to yet — checkpoints start after your first message (and reset on /compact).'
+      setRewinding(true)
+      return null
+    },
   }
 
   /** Run a single piece of user input: a slash command runs as a command, anything else as a turn. */
@@ -375,6 +492,9 @@ export function App(): React.ReactElement {
     } else {
       push({ role: 'user', text })
     }
+    // Mark a rewind point just before this turn (state = before the user message).
+    newCheckpoint(cleanedText || text)
+    maybeProposeSoul(cleanedText || text)   // learn durable preferences (shown after the turn)
     await runHooks(hooksRef.current, 'UserPromptSubmit', { prompt: content })
     await runAgentTurn(content, true, images)
   }
@@ -415,6 +535,7 @@ export function App(): React.ReactElement {
     if (busyRef.current) { onQueue(text); return }
     await runUserInput(text)
     await drainQueue()
+    pumpSoul()   // surface any learned-preference confirms now that we're idle
   }
 
   if (screen === 'loading' || !sys) return <Text color="yellow">✦ {bootStatus}</Text>
@@ -440,7 +561,7 @@ export function App(): React.ReactElement {
     )
 
   const commandNames = [
-    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'yolo', 'context', 'compact', 'clear', 'help',
+    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'yolo', 'context', 'compact', 'rewind', 'clear', 'help',
     ...registryRef.current.list().map(m => m.name),
   ]
 
@@ -456,11 +577,30 @@ export function App(): React.ReactElement {
         todos={todos}
         model={cfg?.model ?? 'no model'} cwd={process.cwd()}
         history={history} queued={queued} onQueue={onQueue}
+        inputActive={!rewinding && !pending && !soulProposal}
       />
       {pending && (
         <PermissionPrompt
           call={pending.call}
           onDecision={(ok) => { pending.resolve(ok); setPending(null) }}
+        />
+      )}
+      {rewinding && (
+        <RewindPicker
+          entries={rewindEntries()}
+          onPick={(id) => { void rewindTo(id) }}
+          onCancel={() => setRewinding(false)}
+        />
+      )}
+      {soulProposal && (
+        <SoulPrompt
+          line={soulProposal}
+          onDecision={(ok) => {
+            const line = soulProposal
+            setSoulProposal(null)
+            if (ok && line) void commitSoul(line)
+            pumpSoul()   // show the next queued proposal, if any
+          }}
         />
       )}
     </Box>

@@ -70,6 +70,44 @@ describe('runTurn promise-nudge', () => {
     expect(cm.messages().some(m => m.role === 'user' && m.content.includes('did not call any tool'))).toBe(true)
   })
 
+  it('nudges when the model prints a shell command in a fence but never runs it', async () => {
+    const ran: string[] = []
+    const bash: Tool = {
+      schema: { name: 'Bash', description: 'run', parameters: { type: 'object', properties: {} } },
+      run: async (a) => { ran.push(String(a.command)); return 'exit=0\nfile.txt' },
+    }
+    const provider = fakeProvider([
+      [{ type: 'text', delta: "Let me list the files:\n```bash\nls -la\n```" }, { type: 'done' }],
+      [{ type: 'tool_call', call: { id: '1', name: 'Bash', arguments: { command: 'ls -la' } } }, { type: 'done' }],
+      [{ type: 'text', delta: 'There is one file.' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'list the files' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [bash], systemPrompt: 'sys' })
+    expect(ran).toEqual(['ls -la'])
+    expect(out).toBe('There is one file.')
+    expect(cm.messages().some(m => m.role === 'user' && m.content.includes('did not run it'))).toBe(true)
+  })
+
+  it('does NOT nudge a long explanation that merely includes a shell snippet', async () => {
+    const ran: string[] = []
+    const bash: Tool = {
+      schema: { name: 'Bash', description: 'run', parameters: { type: 'object', properties: {} } },
+      run: async (a) => { ran.push(String(a.command)); return 'ran' },
+    }
+    const longAnswer =
+      'Great question. To list files you use the ls command, which prints directory entries. ' +
+      'You can add flags like -l for a long listing and -a to include hidden dotfiles. ' +
+      'On most systems this is instant even for large directories. For example:\n```bash\nls -la\n```\n' +
+      'That covers the basics of listing files from a shell prompt.'
+    const provider = fakeProvider([[{ type: 'text', delta: longAnswer }, { type: 'done' }]])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'how do I list files?' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [bash], systemPrompt: 'sys' })
+    expect(ran).toEqual([])               // explanation, not an action
+    expect(out).toContain('basics of listing files')
+  })
+
   it('nudges past a flat "I can\'t access the internet" refusal, then runs the tool', async () => {
     const calls: string[] = []
     const provider = fakeProvider([

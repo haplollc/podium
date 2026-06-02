@@ -30,6 +30,7 @@ export const editTool: Tool = {
     if (count === 0) throw new Error(`old_string not found in ${file}`)
     if (count > 1 && !replaceAll) throw new Error(`old_string is not unique (${count} matches); pass replace_all or add context`)
     const updated = replaceAll ? content.split(oldS).join(newS) : content.replace(oldS, newS)
+    await ctx.snapshot?.(file)   // record pre-edit state for /rewind
     await writeFile(file, updated)
     return `Edited ${path.basename(file)}\n${diffSummary(content, updated, path.basename(file))}`
   },

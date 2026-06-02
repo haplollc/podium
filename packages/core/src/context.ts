@@ -10,6 +10,10 @@ export class ContextManager {
 
   add(m: ChatMessage): void { this.msgs.push(m) }
   messages(): ChatMessage[] { return this.msgs }
+  length(): number { return this.msgs.length }
+
+  /** Drop everything after index `n` (used by /rewind). */
+  truncateTo(n: number): void { this.msgs = this.msgs.slice(0, Math.max(0, n)) }
 
   stats(): ContextStats {
     const used = estimateMessageTokens(this.msgs)

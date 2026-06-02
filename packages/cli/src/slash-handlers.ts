@@ -14,11 +14,15 @@ export interface SlashCtx {
   runSkill(name: string, args: string): Promise<string>
   togglePlan(): boolean
   soul(): string
+  updateSoul(text: string): Promise<void>
+  resetSoul(): Promise<void>
   toggleMetrics(): boolean
   toggleYolo(): boolean
+  /** Open the rewind picker; returns a message if it can't (else null = opened). */
+  openRewind(): string | null
 }
 
-const HELP = 'Commands: /setup · /model · /models · /pull <name> · /skills · /soul · /metrics · /plan · /yolo · /context · /compact · /clear · /help · /<skill>'
+const HELP = 'Commands: /setup · /model · /models · /pull <name> · /skills · /soul · /metrics · /plan · /yolo · /context · /compact · /rewind · /clear · /help · /<skill>'
 
 /** Execute a builtin slash command (or a /<skill-name>), returning a transcript line. */
 export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string> {
@@ -34,6 +38,8 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
     }
     case 'compact':
       return await ctx.compact()
+    case 'rewind':
+      return ctx.openRewind() ?? 'Opening rewind…'
     case 'setup':
       ctx.openSetup()
       return 'Reopening setup…'
@@ -50,8 +56,17 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
       return `Skills: ${ctx.listSkills().join(', ') || '(none)'}`
     case 'plan':
       return `Plan mode ${ctx.togglePlan() ? 'ON — read-only until you /plan again' : 'OFF'}.`
-    case 'soul':
-      return `Podium's soul (create SOUL.md to customize):\n${ctx.soul()}`
+    case 'soul': {
+      const arg = cmd.args.trim()
+      if (!arg)
+        return `Podium's soul (edit SOUL.md, or /soul <preference> to add · /soul reset to clear learned ones):\n${ctx.soul()}`
+      if (arg.toLowerCase() === 'reset') {
+        await ctx.resetSoul()
+        return 'Soul reset to its base voice — learned preferences cleared.'
+      }
+      await ctx.updateSoul(arg)
+      return `✎ Added to my soul: "${arg}"`
+    }
     case 'metrics':
       return `Metrics dashboard ${ctx.toggleMetrics() ? 'ON' : 'OFF'}.`
     case 'yolo':
