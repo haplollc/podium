@@ -9,6 +9,8 @@ export interface MetricsData {
   ramUsedGB: number           // whole-device used RAM
   ramTotalGB: number          // whole-device total RAM
   tokensPerSec: number | null // generation speed of the last/active turn
+  /** Machine temperature + its zone color (cpu or battery sensor). */
+  temp?: { celsius: number; source: 'cpu' | 'battery'; zone: 'green' | 'yellow' | 'red' } | null
 }
 
 function k(n: number): string {
@@ -37,6 +39,7 @@ export function MetricsBar({ m }: { m: MetricsData }): React.ReactElement {
       <Text>
         <Text dimColor>◆ </Text><Text bold>{m.model}</Text>
         {m.tokensPerSec != null ? <Text dimColor>  ·  {m.tokensPerSec.toFixed(0)} tok/s</Text> : ''}
+        {m.temp ? <><Text dimColor>  ·  🌡 </Text><Text color={m.temp.zone}>{m.temp.celsius.toFixed(0)}°C</Text><Text dimColor>{m.temp.source === 'battery' ? ' batt' : ''}</Text></> : ''}
       </Text>
       <Text>
         <Text dimColor>ctx </Text><Text color={ctxColor}>{meter(s.percentUsed)}</Text> {pct}% {k(s.used)}/{k(s.effective)}

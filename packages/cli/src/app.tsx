@@ -21,6 +21,9 @@ import { ensureOllama, type EnsureResult } from './backend.js'
 import { groupQueuedInputs } from './queue.js'
 import { session } from './session.js'
 import { resolveAttachments, buildAttachedMessage } from './attachments.js'
+import { readTemperature, tempZone } from './sysinfo.js'
+
+const fmtTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
 
 export type StartScreen = 'setup' | 'backend-error' | 'repl'
 
@@ -148,9 +151,12 @@ export function App(): React.ReactElement {
     } catch { /* backend may not support /api/ps */ }
     const start = genStartRef.current
     const tokensPerSec = start ? (genCharsRef.current / 4) / Math.max(0.001, (Date.now() - start) / 1000) : null
+    let temp: MetricsData['temp'] = null
+    const reading = await readTemperature()
+    if (reading) temp = { ...reading, zone: tempZone(reading) }
     setMetricsData({
       model: config.model, contextStats: cm.stats(), modelMemGB,
-      ramUsedGB, ramTotalGB: Math.round(total), tokensPerSec,
+      ramUsedGB, ramTotalGB: Math.round(total), tokensPerSec, temp,
     })
   }
 
@@ -299,10 +305,26 @@ export function App(): React.ReactElement {
       setTranscript([]); setStats(mgr.stats())
     },
     compact: async () => {
-      if (!cmRef.current) return
-      await runHooks(hooksRef.current, 'PreCompact', { reason: 'manual' })
-      await compact(cmRef.current, { prefixCount: 1, summarize })
-      setStats(cmRef.current.stats())
+      const cm = cmRef.current
+      if (!cm) return 'Nothing to compact.'
+      const before = cm.stats().used
+      if (cm.messages().length <= 2) return `Not much to compact yet (~${fmtTokens(before)} tokens).`
+      // Show a loader and block input while the summarizer runs.
+      setBusyBoth(true)
+      setStatus('Compacting conversation…')
+      try {
+        await runHooks(hooksRef.current, 'PreCompact', { reason: 'manual' })
+        await compact(cm, { prefixCount: 1, summarize })
+      } finally {
+        setStatus('')
+        setBusyBoth(false)
+      }
+      const after = cm.stats().used
+      setStats(cm.stats())
+      void refreshMetrics()
+      return after < before
+        ? `Compacted: ${fmtTokens(before)} → ${fmtTokens(after)} tokens.`
+        : `Compacted, but it didn't get smaller (${fmtTokens(before)} → ${fmtTokens(after)}) — not much to trim yet.`
     },
     openModelPicker: () => { void refreshInstalledThenOpen() },
     openSetup: () => { void refreshInstalledThenOpen() },

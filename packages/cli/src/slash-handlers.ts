@@ -4,7 +4,7 @@ import type { SlashCommand } from '@podium/core'
 export interface SlashCtx {
   stats(): ContextStats
   clear(): void
-  compact(): Promise<void>
+  compact(): Promise<string>
   openModelPicker(): void
   openSetup(): void
   listModels(): Promise<string[]>
@@ -33,8 +33,7 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
       return `Context: ${Math.round(s.percentUsed * 100)}% · ${s.used}/${s.effective} tokens (window ${s.window})`
     }
     case 'compact':
-      await ctx.compact()
-      return 'Compacted conversation.'
+      return await ctx.compact()
     case 'setup':
       ctx.openSetup()
       return 'Reopening setup…'

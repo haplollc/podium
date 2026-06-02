@@ -5,7 +5,7 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
   return {
     stats: () => ({ used: 1230, effective: 6000, window: 8192, percentUsed: 0.205 }),
     clear: vi.fn(),
-    compact: vi.fn(async () => {}),
+    compact: vi.fn(async () => "Compacted: 5k → 1k tokens."),
     openModelPicker: vi.fn(),
     openSetup: vi.fn(),
     listModels: vi.fn(async () => ['qwen2.5-coder:7b']),
