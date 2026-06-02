@@ -52,12 +52,15 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           URL="https://registry.npmjs.org/podium-cli/-/podium-cli-${VERSION}.tgz"
-          # Wait for the tarball to be available, then hash it.
-          for i in $(seq 1 10); do
-            if curl -fsSL "$URL" -o /tmp/podium.tgz; then break; fi
-            sleep 6
+          # Wait for the tarball to propagate to the CDN, then hash it. Propagation
+          # can take a couple of minutes, so retry generously and FAIL if it never
+          # shows up rather than committing an empty sha256 (a broken formula).
+          for i in $(seq 1 30); do
+            if curl -fsSL "$URL" -o /tmp/podium.tgz && [ -s /tmp/podium.tgz ]; then break; fi
+            echo "tarball not ready (try $i), waiting 10s..."; sleep 10
           done
           SHA=$(shasum -a 256 /tmp/podium.tgz | awk '{print $1}')
+          if [ -z "$SHA" ]; then echo "::error::tarball never became available; sha256 empty" && exit 1; fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Re-apply edits on top of the freshest main so a moved-on main can't reject
