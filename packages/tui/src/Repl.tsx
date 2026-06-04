@@ -45,9 +45,12 @@ export function Repl(props: {
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
+  const [cursor, setCursor] = useState(0)   // caret index within `input`
   const inputRef = useRef('')
   const selRef = useRef(0)
+  const cursorRef = useRef(0)
   const lastEscRef = useRef(0)
+  const escAtRef = useRef(0)     // time of the last Escape, to detect Option+Return (ESC then CR)
   const histIdxRef = useRef(-1)  // -1 = live draft; else index into history
   const [elapsed, setElapsed] = useState(0)
   const busyStartRef = useRef(0)
@@ -69,7 +72,12 @@ export function Repl(props: {
     return commands.filter(c => c.toLowerCase().startsWith(q)).slice(0, 6)
   }
 
-  function setBoth(v: string) { inputRef.current = v; setInput(v) }
+  // Set the input value and place the caret (defaults to end-of-line).
+  function setBoth(v: string, cur = v.length) {
+    inputRef.current = v; setInput(v)
+    const c = Math.max(0, Math.min(v.length, cur))
+    cursorRef.current = c; setCursor(c)
+  }
   function setSelBoth(n: number) { selRef.current = n; setSel(n) }
 
   function submit(value: string) {
@@ -85,6 +93,7 @@ export function Repl(props: {
     if (key.escape) {
       if (props.busy) { props.onAbort?.(); return }
       const now = Date.now()
+      escAtRef.current = now   // a Return right after this = Option/Alt+Return → newline
       if (inputRef.current.length > 0 && now - lastEscRef.current < 600) { setBoth(''); setSelBoth(0) }
       lastEscRef.current = now
       return
@@ -109,24 +118,74 @@ export function Repl(props: {
       setSelBoth(0)
       return
     }
-    if (key.backspace || key.delete) { setBoth(cur.slice(0, -1)); setSelBoth(0); histIdxRef.current = -1; return }
+    // ←/→ move the caret between characters (menu nav uses ↑/↓, so these are free).
+    if (key.leftArrow) { setBoth(cur, cursorRef.current - 1); return }
+    if (key.rightArrow) { setBoth(cur, cursorRef.current + 1); return }
+    if (key.backspace || key.delete) {
+      const c = cursorRef.current
+      if (c === 0) return                                    // nothing before the caret
+      setBoth(cur.slice(0, c - 1) + cur.slice(c), c - 1); setSelBoth(0); histIdxRef.current = -1
+      return
+    }
     if (key.tab) {
       if (menuOpen) setBoth('/' + menu[Math.min(selRef.current, menu.length - 1)] + ' ')
       setSelBoth(0)
       return
     }
-    if (key.ctrl || key.meta) return
-
-    const parts = chunk.split(/[\r\n]/)
-    if (key.return || parts.length > 1) {
+    // Option/Shift + Return inserts a newline instead of submitting (multi-line input).
+    // Some terminals send it as a meta-flagged Return; others as Escape-then-Return,
+    // which we detect via a brief window after the last Escape.
+    if (key.return) {
+      const c = cursorRef.current
+      // Newline (multi-line input) via, in order of reliability:
+      //  • a trailing "\" before the caret (works in every terminal), or
+      //  • Option/Alt/Shift+Return when the terminal flags it as meta/shift, or
+      //  • an Escape immediately before the Return (some terminals send ESC+CR).
+      const optReturn = key.meta || key.shift || Date.now() - escAtRef.current < 60
+      if (cur.slice(0, c).endsWith('\\')) {
+        setBoth(cur.slice(0, c - 1) + '\n' + cur.slice(c), c); setSelBoth(0); histIdxRef.current = -1
+        return
+      }
+      if (optReturn) {
+        escAtRef.current = 0
+        setBoth(cur.slice(0, c) + '\n' + cur.slice(c), c + 1); setSelBoth(0); histIdxRef.current = -1
+        return
+      }
       if (menuOpen && !props.busy) { submit('/' + menu[Math.min(selRef.current, menu.length - 1)]); return }
-      submit(cur + (parts[0] ?? ''))
+      submit(cur)
       return
     }
-    setBoth(cur + chunk); setSelBoth(0); histIdxRef.current = -1
+    if (key.ctrl || key.meta) return
+    if (!chunk) return
+
+    const c = cursorRef.current
+    const normalized = chunk.replace(/\r\n?/g, '\n')
+    const body = normalized.replace(/\n$/, '')   // drop a single trailing newline
+    // A chunk that still has an interior newline is a genuine multi-line paste —
+    // keep the newlines and wait for the user to press Enter to send.
+    if (body.includes('\n')) {
+      setBoth(cur.slice(0, c) + normalized + cur.slice(c), c + normalized.length); setSelBoth(0); histIdxRef.current = -1
+      return
+    }
+    // One line that came in together with its trailing newline (typed text + Enter,
+    // common when input is delivered as a single chunk) → submit it.
+    if (normalized.endsWith('\n')) {
+      if (menuOpen && !props.busy) { submit('/' + menu[Math.min(selRef.current, menu.length - 1)]); return }
+      submit(cur.slice(0, c) + body + cur.slice(c))
+      return
+    }
+    // Plain typed/pasted text with no newline → insert at the caret.
+    setBoth(cur.slice(0, c) + body + cur.slice(c), c + body.length); setSelBoth(0); histIdxRef.current = -1
   }, { isActive: props.inputActive ?? true })
 
   const menu = matchesFor(input)
+
+  // Split the input around the caret so we can draw a block cursor mid-string.
+  // A caret sitting on a newline (or at end) shows as an inverse space.
+  const caretAt = input.slice(cursor, cursor + 1)
+  const caretBlock = caretAt === '' || caretAt === '\n' ? ' ' : caretAt
+  const caretAfter = caretAt === '\n' ? input.slice(cursor) : input.slice(cursor + 1)
+  const caretBefore = input.slice(0, cursor)
 
   return (
     <Box flexDirection="column">
@@ -220,11 +279,16 @@ export function Repl(props: {
         borderLeft={false}
         borderRight={false}
         paddingY={0}
+        flexDirection="column"
       >
-        <Text color="cyan">› </Text>
-        {input.length === 0
-          ? <Text dimColor>{props.busy ? 'type to queue a message · Esc to stop' : 'send a message  ·  / for commands · ↑ history'}</Text>
-          : <Text>{input}<Text color="cyan">▍</Text></Text>}
+        {/* Single wrapping Text (prompt + input as one flow) so a line that wraps
+            doesn't break the box height — and the caret can sit mid-string. */}
+        <Text>
+          <Text color="cyan">› </Text>
+          {input.length === 0
+            ? <Text dimColor>{props.busy ? 'type to queue a message · Esc to stop' : 'send a message · \\↵ or ⌥↵ newline · / commands · ↑ history'}</Text>
+            : <>{caretBefore}<Text inverse>{caretBlock}</Text>{caretAfter}</>}
+        </Text>
       </Box>
 
       {!props.busy && menu.length > 0 && (

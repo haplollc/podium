@@ -72,6 +72,114 @@ describe('Repl', () => {
     expect((f.match(/⚠ YOLO/g) ?? []).length).toBe(1)
   })
 
+  it('left arrow + typing inserts at the caret (not just at the end)', async () => {
+    const onSubmit = vi.fn(async () => '')
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('ac')          // "ac"
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('\u001B[D')      // left arrow → caret between a and c
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('b')           // insert → "abc"
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('abc'))
+  })
+
+  it('backspace deletes the character before the caret', async () => {
+    const onSubmit = vi.fn(async () => '')
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('abc')
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('\u001B[D')      // caret between b and c
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('\u007F')        // backspace → removes 'b' → "ac"
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('ac'))
+  })
+
+  it('trailing backslash + Return inserts a newline instead of submitting', async () => {
+    const onSubmit = vi.fn(async () => '')
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('a\\')  // "a" then a backslash
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('\r')    // Return -> backslash becomes a newline (does not submit)
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('b')
+    await new Promise(r => setTimeout(r, 20))
+    expect(onSubmit).not.toHaveBeenCalled()
+    stdin.write('\r')    // plain Return submits
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('a\nb'))
+  })
+
+  it('Escape immediately before Return also makes a newline', async () => {
+    const onSubmit = vi.fn(async () => '')
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('a')
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('\u001B')  // Escape ...
+    stdin.write('\r')      // ... immediately followed by Return -> newline
+    await new Promise(r => setTimeout(r, 20))
+    stdin.write('b')
+    await new Promise(r => setTimeout(r, 20))
+    expect(onSubmit).not.toHaveBeenCalled()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('a\nb'))
+  })
+
+  it('pasted multi-line text is inserted intact (not submitted on the first newline)', async () => {
+    const onSubmit = vi.fn(async () => '')
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('line1\r\nline2\nline3')   // a paste with mixed CRLF/LF
+    await new Promise(r => setTimeout(r, 30))
+    expect(onSubmit).not.toHaveBeenCalled()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('line1\nline2\nline3'))
+  })
+
+  it('renders a long, wrapping input without crashing and keeps the text', async () => {
+    const long = 'Howdy can you find my resume in a desktop subfolder and then create a portfolio site from it please'
+    const { lastFrame, stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={() => {}} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write(long)
+    await vi.waitFor(() => expect((lastFrame() ?? '').replace(/\n/g, ' ')).toContain('portfolio site'))
+  })
+
   it('shows running background tasks (with URL) live in the footer', () => {
     const { lastFrame } = render(
       <Repl
