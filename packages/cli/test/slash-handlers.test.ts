@@ -17,6 +17,8 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     soul: () => 'be kind and concise',
     updateSoul: vi.fn(async () => {}),
     resetSoul: vi.fn(async () => {}),
+    tasksReport: vi.fn(() => 'No background tasks.'),
+    killTask: vi.fn(() => 'Stopped all background tasks.'),
     toggleMetrics: vi.fn(() => true),
     toggleYolo: vi.fn(() => true),
     openRewind: vi.fn(() => null),
@@ -111,6 +113,18 @@ describe('runSlash', () => {
   it('rewind surfaces the reason it can\'t open', async () => {
     const openRewind = vi.fn(() => 'Nothing to rewind to yet')
     expect(await runSlash({ name: 'rewind', args: '' }, ctx({ openRewind }))).toContain('Nothing to rewind to')
+  })
+  it('tasks reports background tasks', async () => {
+    const tasksReport = vi.fn(() => '#1 [running] python3 -m http.server — http://localhost:8000 (3s)')
+    const out = await runSlash({ name: 'tasks', args: '' }, ctx({ tasksReport }))
+    expect(tasksReport).toHaveBeenCalled()
+    expect(out).toContain('http://localhost:8000')
+  })
+  it('tasks kill <id> routes to killTask', async () => {
+    const killTask = vi.fn(() => 'Stopped task #1.')
+    const out = await runSlash({ name: 'tasks', args: 'kill 1' }, ctx({ killTask }))
+    expect(killTask).toHaveBeenCalledWith('1')
+    expect(out).toContain('Stopped task #1')
   })
   it('unknown command (not a skill) is reported', async () => {
     expect(await runSlash({ name: 'wat', args: '' }, ctx())).toContain('Unknown command')

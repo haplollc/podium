@@ -89,6 +89,51 @@ describe('runTurn promise-nudge', () => {
     expect(cm.messages().some(m => m.role === 'user' && m.content.includes('did not run it'))).toBe(true)
   })
 
+  it('nudges when the model pastes file contents but never calls Write', async () => {
+    const wrote: Array<Record<string, unknown>> = []
+    const write: Tool = {
+      schema: { name: 'Write', description: 'write', parameters: { type: 'object', properties: {} } },
+      run: async (a) => { wrote.push(a); return 'Created index.html' },
+    }
+    const html = '<!DOCTYPE html>\n<html><body><h1>Resume</h1></body></html>'
+    const provider = fakeProvider([
+      [{ type: 'text', delta: `Let's create the index.html file using the Write tool. Here is the content:\n\`\`\`html\n${html}\n\`\`\`` }, { type: 'done' }],
+      [{ type: 'tool_call', call: { id: '1', name: 'Write', arguments: { file_path: 'index.html', content: html } } }, { type: 'done' }],
+      [{ type: 'text', delta: 'Created the site.' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'make a website from my resume' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [write], systemPrompt: 'sys' })
+    expect(wrote).toHaveLength(1)
+    expect(out).toBe('Created the site.')
+    expect(cm.messages().some(m => m.role === 'user' && m.content.includes('did not save them'))).toBe(true)
+  })
+
+  it('breaks out of a degenerate repetition spiral instead of hanging, then nudges', async () => {
+    const wrote: unknown[] = []
+    const write: Tool = {
+      schema: { name: 'Write', description: 'write', parameters: { type: 'object', properties: {} } },
+      run: async (a) => { wrote.push(a); return 'Created index.html' },
+    }
+    // Step 0: the model spirals — the same sentence repeated far past the repetition threshold.
+    const spiral = Array.from({ length: 60 }, () =>
+      ({ type: 'text' as const, delta: "I apologize for the confusion. Let's write this content to the index.html file in your working directory. " }))
+    const provider = fakeProvider([
+      [...spiral, { type: 'done' }],
+      [{ type: 'tool_call', call: { id: '1', name: 'Write', arguments: { file_path: 'index.html', content: '<html></html>' } } }, { type: 'done' }],
+      [{ type: 'text', delta: 'Done.' }, { type: 'done' }],
+    ])
+    const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
+    cm.add({ role: 'user', content: 'make the site' })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [write], systemPrompt: 'sys' })
+    expect(wrote).toHaveLength(1)                 // recovered and actually wrote the file
+    expect(out).toBe('Done.')
+    // The giant repeated blob must NOT have been stored verbatim in history.
+    const assistantBlob = cm.messages().filter(m => m.role === 'assistant').map(m => m.content).join('')
+    expect(assistantBlob.length).toBeLessThan(2000)
+    expect(cm.messages().some(m => m.role === 'user' && m.content.includes('repeating yourself'))).toBe(true)
+  })
+
   it('does NOT nudge a long explanation that merely includes a shell snippet', async () => {
     const ran: string[] = []
     const bash: Tool = {

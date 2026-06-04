@@ -72,6 +72,23 @@ describe('Repl', () => {
     expect((f.match(/⚠ YOLO/g) ?? []).length).toBe(1)
   })
 
+  it('shows running background tasks (with URL) live in the footer', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={() => {}} busy={false}
+        bgTasks={[
+          { id: 1, command: 'python3 -m http.server 8000', startedAt: Date.now() - 5000, status: 'running', output: '', url: 'http://localhost:8000' },
+          { id: 2, command: 'old job', startedAt: Date.now(), status: 'exited', exitCode: 0, output: '' },
+        ]}
+      />,
+    )
+    const f = lastFrame() ?? ''
+    expect(f).toContain('bg #1')
+    expect(f).toContain('http://localhost:8000')
+    expect(f).not.toContain('bg #2')   // exited tasks aren't shown in the live footer
+  })
+
   it('renders live streaming text and a status spinner while busy', () => {
     const { lastFrame } = render(
       <Repl

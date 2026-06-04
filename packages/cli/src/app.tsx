@@ -9,7 +9,7 @@ import {
   ContextManager, buildSystemPrompt, runTurn, compact, parseSlash,
   type ContextStats, type PermissionMode,
 } from '@podium/core'
-import { allTools, baseTools, type TodoItem, type TodoStore } from '@podium/tools'
+import { allTools, baseTools, createBgTaskStore, type TodoItem, type TodoStore, type BgTask } from '@podium/tools'
 import { discoverSkills, defaultSkillRoots, SkillRegistry, buildSkillListing, mergeSkills, builtinSkills } from '@podium/skills'
 import { SetupWizard, Repl, PermissionPrompt, RewindPicker, SoulPrompt, type TranscriptEntry, type MetricsData, type RewindEntry } from '@podium/tui'
 import { loadConfig, saveConfig, type PodiumConfig } from './config.js'
@@ -100,6 +100,33 @@ export function App(): React.ReactElement {
     get: () => todosRef.current,
   }
 
+  const bgStoreRef = useRef(createBgTaskStore())
+  const [bgTasks, setBgTasks] = useState<BgTask[]>([])
+  const bgNotifiedRef = useRef<Set<number>>(new Set())   // task ids we've already announced exiting
+
+  // Poll the background-task registry so the footer reflects live status and we
+  // announce starts/exits in the transcript.
+  useEffect(() => {
+    const tick = () => {
+      const tasks = bgStoreRef.current.list()
+      // Keep the same array reference when there's nothing to show, so we don't
+      // force a redraw every second on an idle session.
+      setBgTasks(prev => (prev.length === 0 && tasks.length === 0) ? prev : tasks)
+      for (const t of tasks) {
+        if (!bgNotifiedRef.current.has(t.id) && t.status === 'running') {
+          bgNotifiedRef.current.add(t.id)
+          push({ role: 'note', text: `▶ Background task #${t.id} started: ${t.command}${t.url ? ` — ${t.url}` : ''}` })
+        }
+        if (t.status === 'exited' && !bgNotifiedRef.current.has(-t.id)) {
+          bgNotifiedRef.current.add(-t.id)
+          push({ role: 'note', text: `⏹ Background task #${t.id} exited${t.exitCode != null ? ` (code ${t.exitCode})` : ''}: ${t.command}` })
+        }
+      }
+    }
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+
   useEffect(() => {
     void (async () => {
       const [s, c, existing, skillMetas, mem, soul, hooks] = await Promise.all([
@@ -117,6 +144,7 @@ export function App(): React.ReactElement {
       void runHooks(hooks, 'SessionStart', { cwd: process.cwd() })
       // On exit (Ctrl+C / quit / terminal-close) evict the model so the GPU is freed.
       session.unload = async () => {
+        bgStoreRef.current.killAll()   // stop dev servers etc. so nothing lingers after exit
         const m = cfgRef.current?.model
         if (m && provider.unload) await provider.unload(m)
       }
@@ -365,6 +393,7 @@ export function App(): React.ReactElement {
           setStatus('Context full — compacting…')
           push({ role: 'note', text: '🗜 Auto-compacting the conversation to free up context…' })
         },
+        bgTasks: bgStoreRef.current,
         onModelStart: () => setStatus('Thinking…'),
         onText: (delta) => { genCharsRef.current += delta.length; setStreaming(s => s + delta) },
         onStepText: (t) => push({ role: 'assistant', text: t }),
@@ -460,6 +489,23 @@ export function App(): React.ReactElement {
     },
     toggleMetrics: () => { const next = !metricsOn; setMetricsOn(next); return next },
     toggleYolo: () => { yoloRef.current = !yoloRef.current; setYoloOn(yoloRef.current); return yoloRef.current },
+    tasksReport: () => {
+      const ts = bgStoreRef.current.list()
+      if (!ts.length) return 'No background tasks.'
+      return ts.map(t => {
+        const dur = Math.round((Date.now() - t.startedAt) / 1000)
+        const head = `#${t.id} [${t.status}${t.exitCode != null ? ` ${t.exitCode}` : ''}] ${t.command}${t.url ? ` — ${t.url}` : ''} (${dur}s)`
+        const tail = t.output.trim().split('\n').slice(-6).map(l => '   ' + l).join('\n')
+        return tail ? `${head}\n${tail}` : head
+      }).join('\n\n')
+    },
+    killTask: (arg) => {
+      const a = arg.trim()
+      if (a === 'all' || a === '') { bgStoreRef.current.killAll(); return 'Stopped all background tasks.' }
+      const id = Number(a)
+      if (!Number.isFinite(id)) return 'Usage: /tasks kill <id|all>'
+      return bgStoreRef.current.kill(id) ? `Stopped task #${id}.` : `No task #${id}.`
+    },
     openRewind: () => {
       if (busyRef.current) return 'Can\'t rewind while a turn is running — press Esc to stop it first.'
       if (!checkpointsRef.current.length) return 'Nothing to rewind to yet — checkpoints start after your first message (and reset on /compact).'
@@ -565,7 +611,7 @@ export function App(): React.ReactElement {
     )
 
   const commandNames = [
-    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'yolo', 'context', 'compact', 'rewind', 'clear', 'help',
+    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'yolo', 'context', 'compact', 'rewind', 'tasks', 'clear', 'help',
     ...registryRef.current.list().map(m => m.name),
   ]
 
@@ -580,7 +626,7 @@ export function App(): React.ReactElement {
         model={cfg?.model ?? 'no model'} cwd={process.cwd()}
         history={history} queued={queued} onQueue={onQueue}
         inputActive={!rewinding && !pending && !soulProposal}
-        planMode={planMode} yolo={yoloOn}
+        planMode={planMode} yolo={yoloOn} bgTasks={bgTasks}
       />
       {pending && (
         <PermissionPrompt

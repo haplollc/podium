@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Box, Text, Static, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import type { ContextStats } from '@podium/core'
-import type { TodoItem } from '@podium/tools'
+import type { TodoItem, BgTask } from '@podium/tools'
 import { ContextMeter } from './ContextMeter.js'
 import { MetricsBar, type MetricsData } from './MetricsBar.js'
 import { Markdown } from './Markdown.js'
@@ -41,6 +41,7 @@ export function Repl(props: {
   inputActive?: boolean         // false while an overlay (rewind picker, permission) owns the keyboard
   planMode?: boolean            // show a compact PLAN indicator in the footer
   yolo?: boolean                // show a compact YOLO indicator in the footer
+  bgTasks?: BgTask[]            // background shell tasks (dev servers) shown live in the footer
 }): React.ReactElement {
   const [input, setInput] = useState('')
   const [sel, setSel] = useState(0)
@@ -185,6 +186,20 @@ export function Repl(props: {
           {props.queued.map((q, i) => (
             <Text key={i} backgroundColor="blackBright" color="white"> ↳ {q.length > 74 ? q.slice(0, 73) + '…' : q} </Text>
           ))}
+        </Box>
+      )}
+
+      {props.bgTasks && props.bgTasks.some(t => t.status === 'running') && (
+        <Box flexDirection="column" marginTop={1}>
+          {props.bgTasks.filter(t => t.status === 'running').map(t => {
+            const dur = Math.floor((Date.now() - t.startedAt) / 1000)
+            const cmd = t.command.length > 44 ? t.command.slice(0, 43) + '…' : t.command
+            return (
+              <Text key={t.id} color="green">
+                <Spinner type="dots" />{' '}bg #{t.id} {cmd}{t.url ? `  ${t.url}` : ''} <Text dimColor>({dur}s)</Text>
+              </Text>
+            )
+          })}
         </Box>
       )}
 

@@ -1,5 +1,6 @@
 export { truncateLines } from './truncate.js'
-export type { Tool, ToolContext, TodoItem, TodoStore, SkillRef, ToolContextSkills } from './types.js'
+export type { Tool, ToolContext, TodoItem, TodoStore, BgTask, BgTaskStore, SkillRef, ToolContextSkills } from './types.js'
+export { createBgTaskStore } from './bgtasks.js'
 
 import { readTool } from './read.js'
 import { writeTool } from './write.js'

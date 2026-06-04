@@ -1,5 +1,5 @@
 import type { Provider, ChatMessage, ToolCall } from '@podium/providers'
-import type { Tool, TodoStore, ToolContextSkills } from '@podium/tools'
+import type { Tool, TodoStore, BgTaskStore, ToolContextSkills } from '@podium/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
 import { extractToolCalls, cleanModelText, stripSpecialTokens } from './tool-parse.js'
@@ -30,6 +30,8 @@ export interface RunTurnOpts {
   maxRepairs?: number
   /** Shared todo store passed to tools (e.g. TodoWrite). */
   todos?: TodoStore
+  /** Registry for background shell tasks (dev servers etc.). */
+  bgTasks?: BgTaskStore
   /** Skill registry passed to the Skill tool. */
   skills?: ToolContextSkills
   /** Subagent spawner passed to the Task tool. */
@@ -81,6 +83,43 @@ function looksLikeUnrunCommand(text: string): boolean {
   return prose.length < 280
 }
 
+/**
+ * Heuristic: the model pasted file contents (a fenced block or raw markup) and
+ * talked about creating/saving a file, but called no tool — so nothing was
+ * written. The classic "Let's write index.html… <html>…" stall.
+ */
+function looksLikeUnrunWrite(text: string): boolean {
+  const hasCode = /```[a-zA-Z]*\n/.test(text) || /<!DOCTYPE html>|<html[\s>]/i.test(text)
+  const intent = /\b(write|create|save|generat\w*|add)\b[^.\n]{0,40}\b(file|index\.html|\.html|\.css|\.js|\.ts|\.py|\.json|\.md)\b/i.test(text)
+    || /\b(the |using the )?write tool\b/i.test(text)
+  return hasCode && intent
+}
+
+/** The streamed text looks like it's assembling a (text-JSON) tool call, where long content is fine. */
+function buildingToolCall(text: string): boolean {
+  return /"(arguments|parameters|file_path|content|command)"\s*:/.test(text) || /\{\s*"(name|tool|function)"\s*:/.test(text)
+}
+
+/**
+ * Detect the small-model failure where generation spirals into repeating the same
+ * paragraph over and over (which presents to the user as a hang). Cheap: take a
+ * slice from near the end and see whether it recurs many times in the output.
+ */
+function isDegenerateRepetition(text: string): boolean {
+  const n = text.length
+  if (n < 800) return false
+  const probe = text.slice(n - 120, n - 40).trim()
+  if (probe.length < 40) return false
+  let count = 0
+  let idx = 0
+  while ((idx = text.indexOf(probe, idx)) !== -1) {
+    count++
+    if (count >= 4) return true
+    idx += probe.length
+  }
+  return false
+}
+
 /** Heuristic: the model refused with its trained "no internet/access" reflex instead of using a tool. */
 function looksLikeRefusal(text: string): boolean {
   return /\b(can'?t|cannot|unable to|don'?t have|do not have|not able to|i'?m not able)\b[^.\n]*\b(access|browse|search|internet|web|real[- ]?time|online|live)\b/i.test(text)
@@ -119,15 +158,41 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }, ...cm.messages()]
     let text = ''
     const toolCalls: ToolCall[] = []
+    let degenerate = false        // model fell into a repetition loop and stalled
+    let deltas = 0
     try {
       for await (const ev of provider.chat({ model, messages, tools: toolSchemas, numCtx: opts.numCtx, keepAlive: opts.keepAlive, signal: opts.signal, temperature })) {
         if (!modelStarted) { modelStarted = true; opts.onModelStart?.() }
-        if (ev.type === 'text') { text += ev.delta; opts.onText?.(ev.delta) }
-        else if (ev.type === 'tool_call') toolCalls.push(ev.call)
+        if (ev.type === 'text') {
+          text += ev.delta; opts.onText?.(ev.delta)
+          // Small models sometimes spiral into repeating the same paragraph forever
+          // (looks like a hang). Bail out of the stream when that happens — but never
+          // mid tool-call JSON, where long content is legitimate.
+          if (!buildingToolCall(text) && (text.length > 24000 || (++deltas % 16 === 0 && isDegenerateRepetition(text)))) {
+            degenerate = true
+            break
+          }
+        } else if (ev.type === 'tool_call') toolCalls.push(ev.call)
       }
     } catch (e) {
       if (opts.signal?.aborted || (e as Error).name === 'AbortError') break
       throw e
+    }
+
+    // A degenerate repetition spiral: don't poison history with the giant blob —
+    // keep a short prefix and push the model to make one concrete move instead.
+    if (degenerate && toolCalls.length === 0) {
+      if (nudges < maxNudges) {
+        nudges++
+        cm.add({ role: 'assistant', content: cleanModelText(text).slice(0, 300) })
+        cm.add({
+          role: 'user',
+          content: 'You started repeating yourself and stalled. Stop. Make ONE concrete move now: to create a file reply with ONLY {"name":"Write","arguments":{"file_path":"<path>","content":"<full file contents>"}}; to run a command use the Bash tool. No prose.',
+        })
+        continue
+      }
+      finalText = 'I got stuck repeating myself, so I stopped. Try a smaller step or rephrase — e.g. ask me to create one specific file.'
+      break
     }
 
     // Strip leaked chat-template tokens (<|im_start|> etc.) before they enter history.
@@ -154,6 +219,16 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         cm.add({
           role: 'user',
           content: 'Your previous message looked like a tool call but could not be parsed. Reply with ONLY a JSON object of the form {"name": <tool>, "arguments": {...}} and no other text.',
+        })
+        continue
+      }
+      // The model pasted file contents in a fence but never called Write, so the
+      // file was never created. Push it to actually call the Write tool.
+      if (nudges < maxNudges && looksLikeUnrunWrite(assistantText)) {
+        nudges++
+        cm.add({
+          role: 'user',
+          content: 'You showed file contents but did not save them — printing them does NOT create the file. To actually create it you MUST call the Write tool: reply with ONLY {"name": "Write", "arguments": {"file_path": "<path>", "content": "<the full file contents>"}} and nothing else.',
         })
         continue
       }
@@ -223,6 +298,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
               signal: opts.signal,
               snapshot: opts.snapshot,
               todos: opts.todos,
+              bgTasks: opts.bgTasks,
               skills: opts.skills,
               spawnAgent: opts.spawnAgent,
               exitPlan: opts.exitPlan,

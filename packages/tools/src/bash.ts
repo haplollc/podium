@@ -44,15 +44,21 @@ export async function normalizePython(cmd: string, _cwd: string): Promise<string
   return out
 }
 
+// Long-lived processes (dev servers, watchers) that would otherwise block the
+// turn forever. These run in the background so the agent can keep working and
+// hand the user a URL immediately.
+const SERVER_RE = /\b(python3?\s+-m\s+http\.server|http-server|live-server|\bserve\b|vite\b|next\s+dev|nuxt\s+dev|webpack\s+serve|ng\s+serve|flask\s+run|rails\s+s(erver)?|php\s+-S|jekyll\s+serve|hugo\s+server|npm\s+(run\s+)?(dev|start)|pnpm\s+(run\s+)?(dev|start)|yarn\s+(dev|start))\b/i
+
 export const bashTool: Tool = {
   schema: {
     name: 'Bash',
-    description: 'Run a shell command in the working directory. Avoid cat/grep/find/sed — use Read/Grep/Glob/Edit instead. Never run a script you have not created yet: use the Write tool to create files before running them.',
+    description: 'Run a shell command in the working directory. Avoid cat/grep/find/sed — use Read/Grep/Glob/Edit instead. Never run a script you have not created yet: use the Write tool to create files before running them. For a long-running process like a dev server (e.g. python3 -m http.server), pass background:true so it does not block — you get a URL back immediately.',
     parameters: {
       type: 'object',
       properties: {
         command: { type: 'string' },
         timeout_ms: { type: 'number', description: 'Default 120000' },
+        background: { type: 'boolean', description: 'Run as a long-lived background process (servers/watchers) and return immediately.' },
       },
       required: ['command'],
     },
@@ -66,6 +72,14 @@ export const bashTool: Tool = {
     // Many systems (incl. macOS) only ship `python3`, not `python` / `pip`.
     // Rewrite the bare command word so the agent's habitual `python …` just works.
     cmd = await normalizePython(cmd, ctx.cwd)
+
+    // Run servers/watchers in the background so they don't hang the turn.
+    const wantsBackground = Boolean(args.background) || SERVER_RE.test(cmd)
+    if (wantsBackground && ctx.bgTasks) {
+      const task = ctx.bgTasks.start(cmd, ctx.cwd)
+      const where = task.url ? ` Open ${task.url}` : ''
+      return `Started in the background as task #${task.id}: ${cmd}.${where}\nIt keeps running (shown in the footer) and is stopped when Podium exits. Do not run it again; if you need its logs, ask to check task #${task.id}.`
+    }
 
     const result = await execa(cmd, {
       shell: true, cwd: ctx.cwd, timeout: Number(args.timeout_ms ?? 120000),
