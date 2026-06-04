@@ -50,7 +50,6 @@ export function Repl(props: {
   const selRef = useRef(0)
   const cursorRef = useRef(0)
   const lastEscRef = useRef(0)
-  const escAtRef = useRef(0)     // time of the last Escape, to detect Option+Return (ESC then CR)
   const histIdxRef = useRef(-1)  // -1 = live draft; else index into history
   const [elapsed, setElapsed] = useState(0)
   const busyStartRef = useRef(0)
@@ -93,7 +92,6 @@ export function Repl(props: {
     if (key.escape) {
       if (props.busy) { props.onAbort?.(); return }
       const now = Date.now()
-      escAtRef.current = now   // a Return right after this = Option/Alt+Return → newline
       if (inputRef.current.length > 0 && now - lastEscRef.current < 600) { setBoth(''); setSelBoth(0) }
       lastEscRef.current = now
       return
@@ -132,22 +130,16 @@ export function Repl(props: {
       setSelBoth(0)
       return
     }
-    // Option/Shift + Return inserts a newline instead of submitting (multi-line input).
-    // Some terminals send it as a meta-flagged Return; others as Escape-then-Return,
-    // which we detect via a brief window after the last Escape.
+    // A real Enter keypress submits (Ink reports it as key.return). A trailing "\"
+    // before the caret, or a terminal that flags Option/Shift+Return as meta/shift,
+    // makes a newline instead.
     if (key.return) {
       const c = cursorRef.current
-      // Newline (multi-line input) via, in order of reliability:
-      //  • a trailing "\" before the caret (works in every terminal), or
-      //  • Option/Alt/Shift+Return when the terminal flags it as meta/shift, or
-      //  • an Escape immediately before the Return (some terminals send ESC+CR).
-      const optReturn = key.meta || key.shift || Date.now() - escAtRef.current < 60
       if (cur.slice(0, c).endsWith('\\')) {
         setBoth(cur.slice(0, c - 1) + '\n' + cur.slice(c), c); setSelBoth(0); histIdxRef.current = -1
         return
       }
-      if (optReturn) {
-        escAtRef.current = 0
+      if (key.meta || key.shift) {
         setBoth(cur.slice(0, c) + '\n' + cur.slice(c), c + 1); setSelBoth(0); histIdxRef.current = -1
         return
       }
@@ -159,6 +151,13 @@ export function Repl(props: {
     if (!chunk) return
 
     const c = cursorRef.current
+    // Option/Alt+Return arrives here, NOT as key.return: the terminal sends ESC+CR
+    // and Ink strips the ESC, leaving a bare carriage return. (Ctrl+J / a lone LF
+    // lands here too.) Either way it means "newline", so insert one.
+    if (chunk === '\r' || chunk === '\n') {
+      setBoth(cur.slice(0, c) + '\n' + cur.slice(c), c + 1); setSelBoth(0); histIdxRef.current = -1
+      return
+    }
     const normalized = chunk.replace(/\r\n?/g, '\n')
     const body = normalized.replace(/\n$/, '')   // drop a single trailing newline
     // A chunk that still has an interior newline is a genuine multi-line paste —
@@ -167,8 +166,8 @@ export function Repl(props: {
       setBoth(cur.slice(0, c) + normalized + cur.slice(c), c + normalized.length); setSelBoth(0); histIdxRef.current = -1
       return
     }
-    // One line that came in together with its trailing newline (typed text + Enter,
-    // common when input is delivered as a single chunk) → submit it.
+    // One line that arrived together with a trailing newline (e.g. a one-line paste
+    // ending in a newline, or text+Enter delivered as a single chunk) → submit it.
     if (normalized.endsWith('\n')) {
       if (menuOpen && !props.busy) { submit('/' + menu[Math.min(selRef.current, menu.length - 1)]); return }
       submit(cur.slice(0, c) + body + cur.slice(c))

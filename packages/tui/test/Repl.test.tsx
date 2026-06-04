@@ -130,7 +130,7 @@ describe('Repl', () => {
     await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('a\nb'))
   })
 
-  it('Escape immediately before Return also makes a newline', async () => {
+  it('Option/Alt + Return (ESC+CR) inserts a newline instead of submitting', async () => {
     const onSubmit = vi.fn(async () => '')
     const { stdin } = render(
       <Repl
@@ -141,13 +141,12 @@ describe('Repl', () => {
     await new Promise(r => setTimeout(r, 30))
     stdin.write('a')
     await new Promise(r => setTimeout(r, 20))
-    stdin.write('\u001B')  // Escape ...
-    stdin.write('\r')      // ... immediately followed by Return -> newline
+    stdin.write('\u001B\r')  // Option/Alt+Return: terminal sends ESC+CR
     await new Promise(r => setTimeout(r, 20))
     stdin.write('b')
     await new Promise(r => setTimeout(r, 20))
-    expect(onSubmit).not.toHaveBeenCalled()
-    stdin.write('\r')
+    expect(onSubmit).not.toHaveBeenCalled()   // it became a newline, not a submit
+    stdin.write('\r')                          // a real Enter submits
     await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('a\nb'))
   })
 
