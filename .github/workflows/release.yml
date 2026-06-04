@@ -43,8 +43,15 @@ jobs:
           fi
           echo "Bundle is self-contained."
 
-      - name: Publish to npm
-        run: pnpm --filter podium-cli publish --no-git-checks
+      - name: Pack and publish to npm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd packages/cli
+          # Pack the exact tarball we publish, then publish THAT file. Hashing the
+          # local artifact (next step) avoids waiting on npm CDN propagation, and
+          # since we upload these exact bytes the sha256 matches what brew fetches.
+          npm pack
+          npm publish "podium-cli-${VERSION}.tgz"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -52,17 +59,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           URL="https://registry.npmjs.org/podium-cli/-/podium-cli-${VERSION}.tgz"
-          # Fetch the published tarball via `npm pack` (resolves through the registry
-          # API, which is reliable) rather than curling the CDN .tgz URL (that 404s
-          # for minutes after publish). Retry for propagation, FAIL on empty sha.
-          cd "$(mktemp -d)"
-          for i in $(seq 1 30); do
-            if npm pack "podium-cli@${VERSION}" >/dev/null 2>&1; then break; fi
-            echo "tarball not ready (try $i), waiting 10s..."; sleep 10
-          done
-          SHA=$(shasum -a 256 "podium-cli-${VERSION}.tgz" 2>/dev/null | awk '{print $1}')
-          cd "$GITHUB_WORKSPACE"
-          if [ -z "$SHA" ]; then echo "::error::tarball never became available; sha256 empty" && exit 1; fi
+          SHA=$(shasum -a 256 "packages/cli/podium-cli-${VERSION}.tgz" | awk '{print $1}')
+          if [ -z "$SHA" ]; then echo "::error::no packed tarball to hash" && exit 1; fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Re-apply edits on top of the freshest main so a moved-on main can't reject

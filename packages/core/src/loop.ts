@@ -153,6 +153,13 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
           messages: [{ role: 'user', content: prompt }],
         })),
       })
+      // Re-anchor on the task so the model resumes instead of treating the summary
+      // as a finished report. It still has the original request + the summary's
+      // "Next step", so tell it to act on that now.
+      cm.add({
+        role: 'user',
+        content: 'The earlier conversation was just summarized to save space — you have NOT finished. Continue the task: take the "Next step" from the summary now by calling the appropriate tool. Do not restart from scratch, re-summarize, or stop to ask if you should continue — just keep going.',
+      })
     }
 
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }, ...cm.messages()]

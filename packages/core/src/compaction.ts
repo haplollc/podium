@@ -2,13 +2,13 @@ import type { ChatMessage } from '@podium/providers'
 import type { ContextStats } from './types.js'
 import type { ContextManager } from './context.js'
 
-export const SUMMARY_PROMPT = `Summarize the conversation below so work can continue with the detail intact. Use these sections:
-1. Task — what the user is trying to accomplish.
-2. Current state — what has been done so far.
-3. Files & code — files touched and key snippets, with why.
-4. Decisions — important choices made.
-5. Next steps — the immediate next action.
-Be concise but preserve technical specifics. Output only the summary.`
+export const SUMMARY_PROMPT = `Summarize the conversation below so the assistant can seamlessly CONTINUE the work without losing the thread. Use these sections:
+1. Task — what the user asked for, in full (the goal still being worked on).
+2. Done so far — concrete steps already completed (files created/edited, commands run, what they returned).
+3. Files & code — files touched and key snippets/paths, with why.
+4. Decisions & constraints — important choices made and rules to keep following.
+5. Next step — the single next action to take RIGHT NOW, including the exact tool or command and any paths, IDs, or values needed to do it.
+Preserve technical specifics (paths, names, values). Output only the summary.`
 
 /** Trigger when used tokens are within `buffer` of the effective window. */
 export function shouldCompact(stats: ContextStats, buffer: number): boolean {

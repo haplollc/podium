@@ -266,6 +266,25 @@ describe('runTurn', () => {
     expect(compactNotices).toBeGreaterThan(0)             // the UI was told it happened
     const contents = cm.messages().map(m => m.content).join('\n')
     expect(contents).toContain('SUMMARY of earlier work') // earlier tail was replaced by the summary
+    // After compacting it re-anchors on the task so the model keeps working.
+    expect(cm.messages().some(m => m.role === 'user' && /continue the task/i.test(m.content))).toBe(true)
+  })
+
+  it('after auto-compaction the model still completes the in-flight tool work', async () => {
+    const calls: string[] = []
+    const provider = fakeProvider([
+      [{ type: 'text', delta: 'Task: build site. Next step: write index.html' }, { type: 'done' }], // summarize call
+      [{ type: 'tool_call', call: { id: '1', name: 'Echo', arguments: { value: 'resumed' } } }, { type: 'done' }], // resumes with a tool
+      [{ type: 'text', delta: 'finished the site' }, { type: 'done' }],
+    ])
+    // Small prefix (the task) + a bulky tail so the first step compacts, then the
+    // summary leaves headroom so it does NOT keep recompacting.
+    const cm = new ContextManager({ window: 2000, outputReserve: 200 })
+    cm.add({ role: 'user', content: 'build a website from my resume' })
+    for (let i = 0; i < 10; i++) cm.add({ role: 'assistant', content: 'x'.repeat(800) })
+    const out = await runTurn({ provider, model: 'm', cm, tools: [echoTool(calls)], systemPrompt: 'sys' })
+    expect(calls).toEqual(['resumed'])   // it acted after compaction instead of stalling
+    expect(out).toBe('finished the site')
   })
 
   it('does NOT auto-compact (or notify) when context is comfortably under the limit', async () => {
