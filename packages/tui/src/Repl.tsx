@@ -10,16 +10,51 @@ import { Banner } from './Banner.js'
 
 export interface TranscriptEntry { role: 'user' | 'assistant' | 'tool' | 'output' | 'note' | 'banner'; text: string }
 
-/**
- * Only hide the live preview when the buffer is *clearly* a raw text tool-call
- * (starts with { or [ and carries tool-call keys). Plain prose — even prose
- * containing a code fence or a stray brace — must keep streaming so narration
- * doesn't appear then vanish.
- */
-function looksLikeRawToolCall(s: string): boolean {
-  const t = s.trimStart()
-  if (!t.startsWith('{') && !t.startsWith('[')) return false
-  return /"(name|tool|tool_name|function|arguments|tool_calls)"\s*:/.test(t)
+// Start of a text-emitted tool call: a JSON object keyed by a tool-call field,
+// optionally opened by a ``` / ```json fence.
+const TOOLCALL_JSON = /\{\s*"(?:name|tool|tool_name|function|arguments|tool_calls|tool_call)"\s*:/i
+
+/** Index in `s` where a streaming tool-call begins, or -1 if it's all prose. */
+function toolCallStart(s: string): number {
+  const m = TOOLCALL_JSON.exec(s)
+  if (!m) {
+    // A json/tool fence on its own (the JSON hasn't streamed in yet).
+    const f = /```(?:json|tool|tool_call)\b/i.exec(s)
+    return f ? f.index : -1
+  }
+  // Swallow an immediately-preceding ``` fence (with optional language tag).
+  const fence = /```(?:json|tool|tool_call|js|javascript)?[ \t]*\n?[ \t]*$/i.exec(s.slice(0, m.index))
+  return fence ? fence.index : m.index
+}
+
+const baseName = (p?: string) => (p ? p.split('/').filter(Boolean).pop() : undefined)
+
+/** A friendly "what it's doing" label derived from a (possibly partial) tool-call JSON. */
+function streamingToolLabel(toolPart: string): string {
+  const name = /"(?:name|tool|tool_name)"\s*:\s*"([^"]+)"/i.exec(toolPart)?.[1]
+  const file = baseName(/"(?:file_path|path|file)"\s*:\s*"([^"]+)"/i.exec(toolPart)?.[1])
+  const cmd = /"(?:command|cmd)"\s*:\s*"([^"\\]{1,40})/i.exec(toolPart)?.[1]
+  switch (name) {
+    case 'Write': return file ? `Writing ${file}` : 'Writing a file…'
+    case 'Edit': return file ? `Editing ${file}` : 'Editing a file…'
+    case 'Read': return file ? `Reading ${file}` : 'Reading a file…'
+    case 'Bash': return cmd ? `Running ${cmd.trim()}…` : 'Running a command…'
+    case 'WebSearch': return 'Searching the web…'
+    case 'WebFetch': return 'Reading a web page…'
+    case 'Grep': return 'Searching the code…'
+    case 'Glob': return 'Finding files…'
+    case 'TodoWrite': return 'Updating the to-do list…'
+    case 'Task': return 'Delegating to a subagent…'
+    case 'Skill': return 'Running a skill…'
+    default: return name ? `Using ${name}…` : 'Preparing the next step…'
+  }
+}
+
+/** Split a streaming buffer into the prose to show and (if any) a tool-call activity label. */
+function splitStreaming(s: string): { prose: string; toolLabel: string | null } {
+  const i = toolCallStart(s)
+  if (i < 0) return { prose: s, toolLabel: null }
+  return { prose: s.slice(0, i).trim(), toolLabel: streamingToolLabel(s.slice(i)) }
 }
 
 export function Repl(props: {
@@ -186,6 +221,10 @@ export function Repl(props: {
   const caretAfter = caretAt === '\n' ? input.slice(cursor) : input.slice(cursor + 1)
   const caretBefore = input.slice(0, cursor)
 
+  // Split live output into narration vs. an in-progress tool call so we never show
+  // raw `{"name":"Write"…}` — just a friendly activity label on the spinner.
+  const stream = props.busy && props.streaming ? splitStreaming(props.streaming) : { prose: '', toolLabel: null }
+
   return (
     <Box flexDirection="column">
       <Static items={[{ role: 'banner' as const, text: '' }, ...props.transcript]}>
@@ -211,14 +250,16 @@ export function Repl(props: {
         }}
       </Static>
 
-      {props.busy && props.streaming && !looksLikeRawToolCall(props.streaming)
-        ? <Box marginTop={1}><Markdown content={props.streaming} /></Box>
+      {props.busy && stream.prose
+        ? <Box marginTop={1}><Markdown content={stream.prose} /></Box>
         : null}
 
       {props.busy && (
         <Box>
           <Text color="yellow"><Spinner type="dots" /></Text>
-          <Text color="yellow"> {props.status ?? 'Thinking…'}</Text>
+          {/* While a tool call is being emitted, show a friendly "Writing index.html…"
+              instead of the raw JSON; otherwise the model/tool status. */}
+          <Text color="yellow"> {stream.toolLabel ?? props.status ?? 'Thinking…'}</Text>
           <Text dimColor> ({elapsed}s)</Text>
         </Box>
       )}

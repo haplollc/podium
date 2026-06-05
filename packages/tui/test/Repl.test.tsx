@@ -231,6 +231,34 @@ describe('Repl', () => {
     expect(lastFrame()).not.toContain('file_path')
   })
 
+  it('shows a friendly activity label (not raw JSON) for a fenced tool call mid-stream', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={() => {}} busy={true}
+        streaming={'Let me create the homepage.\n```json\n{"name":"Write","arguments":{"file_path":"index.html","content":"<html>'}
+      />,
+    )
+    const f = lastFrame() ?? ''
+    expect(f).toContain('Let me create the homepage')   // narration kept
+    expect(f).toContain('Writing index.html')           // friendly label
+    expect(f).not.toContain('file_path')                // raw JSON hidden
+    expect(f).not.toContain('"name"')
+  })
+
+  it('derives a friendly label for a bare-JSON Bash tool call', () => {
+    const { lastFrame } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={() => {}} busy={true}
+        streaming={'{"name":"Bash","arguments":{"command":"npm run dev"}}'}
+      />,
+    )
+    const f = lastFrame() ?? ''
+    expect(f).toContain('Running npm run dev')
+    expect(f).not.toContain('arguments')
+  })
+
   it('keeps working notes in the transcript', () => {
     const { lastFrame } = render(
       <Repl
