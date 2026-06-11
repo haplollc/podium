@@ -1,4 +1,4 @@
-export { estimateTokens, estimateMessageTokens } from './tokens.js'
+export { estimateTokens, estimateMessageTokens, tokenizerReady } from './tokens.js'
 export { ContextManager } from './context.js'
 export type { ContextOpts } from './context.js'
 export type { ContextStats } from './types.js'
@@ -12,5 +12,5 @@ export { extractToolCalls, cleanModelText, stripSpecialTokens } from './tool-par
 export type { ParsedTools } from './tool-parse.js'
 export { parseSlash, isBuiltinSlash, BUILTIN_SLASH } from './slash.js'
 export type { SlashCommand, BuiltinSlash } from './slash.js'
-export { decide } from './permission.js'
+export { decide, decideCall, isSafeBashCommand } from './permission.js'
 export type { PermissionMode, PermissionDecision } from './permission.js'

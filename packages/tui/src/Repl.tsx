@@ -29,6 +29,22 @@ function toolCallStart(s: string): number {
 
 const baseName = (p?: string) => (p ? p.split('/').filter(Boolean).pop() : undefined)
 
+/** Caret index of the start of the word before `c` (readline ⌥← / Ctrl+W). */
+function prevWordIndex(s: string, c: number): number {
+  let i = Math.max(0, Math.min(s.length, c))
+  while (i > 0 && /\s/.test(s[i - 1])) i--
+  while (i > 0 && !/\s/.test(s[i - 1])) i--
+  return i
+}
+
+/** Caret index just past the end of the word after `c` (readline ⌥→). */
+function nextWordIndex(s: string, c: number): number {
+  let i = Math.max(0, Math.min(s.length, c))
+  while (i < s.length && /\s/.test(s[i])) i++
+  while (i < s.length && !/\s/.test(s[i])) i++
+  return i
+}
+
 /** A friendly "what it's doing" label derived from a (possibly partial) tool-call JSON. */
 function streamingToolLabel(toolPart: string): string {
   const name = /"(?:name|tool|tool_name)"\s*:\s*"([^"]+)"/i.exec(toolPart)?.[1]
@@ -93,7 +109,7 @@ export function Repl(props: {
     if (!props.busy) return
     busyStartRef.current = Date.now()
     setElapsed(0)
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - busyStartRef.current) / 1000)), 500)
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - busyStartRef.current) / 1000)), 1000)
     return () => clearInterval(id)
   }, [props.busy])
 
@@ -151,9 +167,25 @@ export function Repl(props: {
       setSelBoth(0)
       return
     }
+    // Option/Alt+←/→ (also ESC-b/ESC-f) jump by word.
+    const isWordLeft = key.meta && (key.leftArrow || chunk === 'b')
+    const isWordRight = key.meta && (key.rightArrow || chunk === 'f')
+    if (isWordLeft) { setBoth(cur, prevWordIndex(cur, cursorRef.current)); return }
+    if (isWordRight) { setBoth(cur, nextWordIndex(cur, cursorRef.current)); return }
     // ←/→ move the caret between characters (menu nav uses ↑/↓, so these are free).
     if (key.leftArrow) { setBoth(cur, cursorRef.current - 1); return }
     if (key.rightArrow) { setBoth(cur, cursorRef.current + 1); return }
+    // Readline-style editing: Ctrl+A/E home/end, Ctrl+U/K kill to start/end, Ctrl+W delete word.
+    if (key.ctrl && chunk === 'a') { setBoth(cur, 0); return }
+    if (key.ctrl && chunk === 'e') { setBoth(cur, cur.length); return }
+    if (key.ctrl && chunk === 'u') { setBoth(cur.slice(cursorRef.current), 0); setSelBoth(0); histIdxRef.current = -1; return }
+    if (key.ctrl && chunk === 'k') { setBoth(cur.slice(0, cursorRef.current), cursorRef.current); setSelBoth(0); histIdxRef.current = -1; return }
+    if (key.ctrl && chunk === 'w') {
+      const c = cursorRef.current
+      const start = prevWordIndex(cur, c)
+      setBoth(cur.slice(0, start) + cur.slice(c), start); setSelBoth(0); histIdxRef.current = -1
+      return
+    }
     if (key.backspace || key.delete) {
       const c = cursorRef.current
       if (c === 0) return                                    // nothing before the caret

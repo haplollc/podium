@@ -118,6 +118,9 @@ export class OllamaProvider implements Provider {
       const c = chunk as {
         message?: { content?: string; tool_calls?: { function: { name: string; arguments: unknown } }[] }
         done?: boolean
+        prompt_eval_count?: number
+        eval_count?: number
+        eval_duration?: number   // nanoseconds
       }
       const error = streamError(c)
       if (error) throw new Error(`Ollama chat failed: ${error}`)
@@ -131,7 +134,16 @@ export class OllamaProvider implements Provider {
         }
         yield { type: 'tool_call', call }
       }
-      if (c.done) yield { type: 'done' }
+      if (c.done) {
+        yield {
+          type: 'done',
+          stats: {
+            promptTokens: c.prompt_eval_count,
+            evalTokens: c.eval_count,
+            evalDurationMs: c.eval_duration != null ? c.eval_duration / 1e6 : undefined,
+          },
+        }
+      }
     }
   }
 }

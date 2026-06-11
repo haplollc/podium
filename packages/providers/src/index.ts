@@ -8,5 +8,5 @@ export { getProvider, detectBackends } from './factory.js'
 export type { BackendId } from './factory.js'
 export type {
   Provider, LocalModel, RunningModel, PullProgress, ModelCapabilities, ChatMessage,
-  ToolCall, ToolSchema, ChatRequest, ChatEvent, HealthStatus,
+  ToolCall, ToolSchema, ChatRequest, ChatEvent, ChatStats, HealthStatus,
 } from './types.js'

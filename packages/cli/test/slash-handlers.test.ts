@@ -22,6 +22,8 @@ function ctx(over: Partial<SlashCtx> = {}): SlashCtx {
     toggleMetrics: vi.fn(() => true),
     toggleYolo: vi.fn(() => true),
     openRewind: vi.fn(() => null),
+    resume: vi.fn(async () => 'Resumed session (4 messages).'),
+    exit: vi.fn(() => 'Bye!'),
     ...over,
   }
 }
@@ -128,5 +130,16 @@ describe('runSlash', () => {
   })
   it('unknown command (not a skill) is reported', async () => {
     expect(await runSlash({ name: 'wat', args: '' }, ctx())).toContain('Unknown command')
+  })
+  it('resume restores the saved session', async () => {
+    const resume = vi.fn(async () => 'Resumed session (4 messages).')
+    expect(await runSlash({ name: 'resume', args: '' }, ctx({ resume }))).toContain('Resumed')
+    expect(resume).toHaveBeenCalled()
+  })
+  it('exit and quit both route to ctx.exit', async () => {
+    const exit = vi.fn(() => 'Bye!')
+    expect(await runSlash({ name: 'exit', args: '' }, ctx({ exit }))).toBe('Bye!')
+    expect(await runSlash({ name: 'quit', args: '' }, ctx({ exit }))).toBe('Bye!')
+    expect(exit).toHaveBeenCalledTimes(2)
   })
 })

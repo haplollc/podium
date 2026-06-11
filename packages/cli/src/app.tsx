@@ -21,7 +21,8 @@ import { loadHooks, runHooks, type HookConfig } from './hooks.js'
 import { toolLabel, toolActivity, toolStartNote, toolResultNote } from './tool-label.js'
 import { ensureOllama, type EnsureResult } from './backend.js'
 import { groupQueuedInputs } from './queue.js'
-import { session } from './session.js'
+import { session, shutdown } from './session.js'
+import { loadHistory, appendHistory, saveSession, loadSession, clearSession } from './persist.js'
 import { resolveAttachments, buildAttachedMessage } from './attachments.js'
 import { readTemperature, tempZone } from './sysinfo.js'
 
@@ -79,9 +80,15 @@ export function App(): React.ReactElement {
   const memoryRef = useRef('')
   const soulRef = useRef(DEFAULT_SOUL)
   const hooksRef = useRef<HookConfig>({})
-  const genStartRef = useRef<number | null>(null)  // turn start (ms) for tok/s
+  const genStartRef = useRef<number | null>(null)  // turn start (ms) for the tok/s fallback
   const genCharsRef = useRef(0)                     // streamed chars this turn
+  const genStatsRef = useRef({ evalTokens: 0, evalMs: 0 })  // real backend token stats
   const yoloRef = useRef(false)                     // skip permission prompts
+  const alwaysAllowRef = useRef<Set<string>>(new Set())  // tools approved with "always" this session
+  const transcriptRef = useRef<TranscriptEntry[]>([])    // mirror of `transcript` for callbacks
+  const streamBufRef = useRef('')                        // streamed text pending display
+  const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastPromptRef = useRef('')                       // dedupe consecutive history appends
   const abortRef = useRef<AbortController | null>(null) // cancels the active turn
   const busyRef = useRef(false)                     // stale-closure-safe mirror of `busy`
   const visionCacheRef = useRef<Map<string, boolean>>(new Map())  // model → supports images
@@ -129,14 +136,16 @@ export function App(): React.ReactElement {
 
   useEffect(() => {
     void (async () => {
-      const [s, c, existing, skillMetas, mem, soul, hooks] = await Promise.all([
+      const [s, c, existing, skillMetas, mem, soul, hooks, pastPrompts] = await Promise.all([
         computeSystemInfo(), loadCatalog(), loadConfig(),
         discoverSkills(defaultSkillRoots(os.homedir(), process.cwd())),
         loadMemory(process.cwd(), os.homedir()),
         loadSoul(process.cwd(), os.homedir()),
         loadHooks(),
+        loadHistory(),
       ])
       setSys(s); setCatalog(c); setCfgBoth(existing)
+      setHistory(pastPrompts)
       registryRef.current = new SkillRegistry(mergeSkills(skillMetas, builtinSkills))
       memoryRef.current = mem
       soulRef.current = soul
@@ -178,7 +187,31 @@ export function App(): React.ReactElement {
     void drainQueue()
   }
 
-  function push(entry: TranscriptEntry) { setTranscript(t => [...t, entry]) }
+  function push(entry: TranscriptEntry) {
+    transcriptRef.current = [...transcriptRef.current, entry]
+    setTranscript(transcriptRef.current)
+  }
+
+  /**
+   * Streamed deltas are buffered and flushed at most every 80ms — Ink re-renders
+   * the whole tree per state update, so per-token updates burn CPU (and battery)
+   * for no visible benefit at generation speed.
+   */
+  function pushStreamDelta(delta: string) {
+    streamBufRef.current += delta
+    if (!streamTimerRef.current) {
+      streamTimerRef.current = setTimeout(() => {
+        streamTimerRef.current = null
+        setStreaming(streamBufRef.current)
+      }, 80)
+    }
+  }
+
+  function clearStreaming() {
+    streamBufRef.current = ''
+    if (streamTimerRef.current) { clearTimeout(streamTimerRef.current); streamTimerRef.current = null }
+    setStreaming('')
+  }
 
   /** Record a rewind point just before a user turn. */
   function newCheckpoint(label: string) {
@@ -279,8 +312,12 @@ export function App(): React.ReactElement {
       const me = loaded.find(x => x.name === config.model) ?? loaded[0]
       if (me) modelMemGB = me.sizeBytes / 1024 ** 3
     } catch { /* backend may not support /api/ps */ }
+    // Prefer the backend's real eval stats; fall back to the chars/4 estimate mid-stream.
+    const gs = genStatsRef.current
     const start = genStartRef.current
-    const tokensPerSec = start ? (genCharsRef.current / 4) / Math.max(0.001, (Date.now() - start) / 1000) : null
+    const tokensPerSec = gs.evalMs > 0
+      ? gs.evalTokens / (gs.evalMs / 1000)
+      : start ? (genCharsRef.current / 4) / Math.max(0.001, (Date.now() - start) / 1000) : null
     let temp: MetricsData['temp'] = null
     const reading = await readTemperature()
     if (reading) temp = { ...reading, zone: tempZone(reading) }
@@ -294,7 +331,7 @@ export function App(): React.ReactElement {
   useEffect(() => {
     if (!metricsOn) { setMetricsData(null); return }
     void refreshMetrics()
-    const id = setInterval(() => { void refreshMetrics() }, 1200)
+    const id = setInterval(() => { void refreshMetrics() }, 2000)
     return () => clearInterval(id)
   }, [metricsOn])
 
@@ -315,7 +352,7 @@ export function App(): React.ReactElement {
     const config = cfgRef.current
     if (!config) return ''
     let out = ''
-    for await (const ev of provider.chat({ model: config.model, numCtx: config.contextSize, messages: [{ role: 'user', content: prompt }] })) {
+    for await (const ev of provider.chat({ model: config.model, numCtx: config.contextSize, keepAlive: KEEP_ALIVE, messages: [{ role: 'user', content: prompt }] })) {
       if (ev.type === 'text') out += ev.delta
     }
     return out
@@ -333,6 +370,7 @@ export function App(): React.ReactElement {
   }
 
   function askPermission(call: ToolCall): Promise<boolean> {
+    if (alwaysAllowRef.current.has(call.name)) return Promise.resolve(true)
     return new Promise(resolve => setPending({ call, resolve }))
   }
 
@@ -345,8 +383,12 @@ export function App(): React.ReactElement {
       provider, model: config.model, cm: cm2, tools: baseTools,
       systemPrompt: buildSystemPrompt({ cwd: process.cwd(), os: process.platform, toolNames: baseTools.map(t => t.schema.name) }),
       numCtx: config.contextSize, keepAlive: KEEP_ALIVE,
+      // Esc on the main turn must also stop a running subagent.
+      signal: abortRef.current?.signal,
       mode: (yoloRef.current ? 'yolo' : (config.mode ?? 'default')) as PermissionMode,
       todos: todoStore,
+      bgTasks: bgStoreRef.current,
+      onToolStart: (call) => setStatus(`Subagent: ${toolActivity(call)}…`),
       // Subagents must honor the same permission + hook gates as the main loop.
       onPermissionAsk: askPermission,
       preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
@@ -369,11 +411,12 @@ export function App(): React.ReactElement {
     abortRef.current = controller
     setBusyBoth(true)
     setStatus('Loading model…')   // until the model emits its first token
-    setStreaming('')
+    clearStreaming()
     todosRef.current = []
     setTodos([])
     genStartRef.current = Date.now()
     genCharsRef.current = 0
+    genStatsRef.current = { evalTokens: 0, evalMs: 0 }
     push({ role: 'note', text: 'Hmm, let me get oriented and pick the next useful step.' })
     try {
       const reply = await runTurn({
@@ -395,12 +438,16 @@ export function App(): React.ReactElement {
         },
         bgTasks: bgStoreRef.current,
         onModelStart: () => setStatus('Thinking…'),
-        onText: (delta) => { genCharsRef.current += delta.length; setStreaming(s => s + delta) },
+        onText: (delta) => { genCharsRef.current += delta.length; pushStreamDelta(delta) },
+        onStats: (s) => {
+          genStatsRef.current.evalTokens += s.evalTokens ?? 0
+          genStatsRef.current.evalMs += s.evalDurationMs ?? 0
+        },
         onStepText: (t) => push({ role: 'assistant', text: t }),
         onPermissionAsk: askPermission,
         preToolUse: (call) => runHooks(hooksRef.current, 'PreToolUse', call),
         onToolStart: (call) => {
-          setStreaming('')                       // tool starting; drop the pre-tool preview
+          clearStreaming()                       // tool starting; drop the pre-tool preview
           setStatus(`${toolActivity(call)}…`)
           push({ role: 'note', text: toolStartNote(call) })
           push({ role: 'tool', text: toolLabel(call) })
@@ -422,10 +469,17 @@ export function App(): React.ReactElement {
     } finally {
       abortRef.current = null
       genStartRef.current = null
-      setStreaming('')
+      clearStreaming()
       setStatus('')
       setStats(cm.stats())
       setBusyBoth(false)
+      // Persist the conversation so /resume can pick it up after a restart.
+      if (cm.length() > 0) {
+        void saveSession({
+          model: config.model, contextSize: config.contextSize, cwd: process.cwd(),
+          savedAt: Date.now(), messages: cm.messages(), transcript: transcriptRef.current,
+        })
+      }
     }
   }
 
@@ -439,7 +493,9 @@ export function App(): React.ReactElement {
       const mgr = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
       cmRef.current = mgr
       checkpointsRef.current = []
+      transcriptRef.current = []
       setTranscript([]); setStats(mgr.stats())
+      void clearSession(process.cwd())   // a cleared conversation shouldn't /resume back
     },
     compact: async () => {
       const cm = cmRef.current
@@ -512,10 +568,37 @@ export function App(): React.ReactElement {
       setRewinding(true)
       return null
     },
+    resume: async () => {
+      if (busyRef.current) return 'Can\'t resume while a turn is running — press Esc to stop it first.'
+      const config = cfgRef.current
+      if (!config) return 'Not configured yet.'
+      const saved = await loadSession(process.cwd())
+      if (!saved) return 'No saved session for this project yet — sessions save automatically after each turn.'
+      const mgr = new ContextManager({ window: config.contextSize, outputReserve: 2000 })
+      for (const m of saved.messages) mgr.add(m)
+      cmRef.current = mgr
+      checkpointsRef.current = []   // file snapshots from the old run are gone
+      // Append the restored transcript (the terminal scrollback is append-only).
+      transcriptRef.current = [...transcriptRef.current, ...saved.transcript]
+      setTranscript(transcriptRef.current)
+      setStats(mgr.stats())
+      const when = new Date(saved.savedAt).toLocaleString()
+      const modelNote = saved.model !== config.model ? ` · saved with ${saved.model}` : ''
+      return `↩ Resumed session from ${when} — ${saved.messages.length} messages restored${modelNote}.`
+    },
+    exit: () => {
+      // Let the goodbye line render, then evict the model and quit.
+      setTimeout(() => { void shutdown(0) }, 100)
+      return 'Bye — unloading the model and exiting.'
+    },
   }
 
   /** Run a single piece of user input: a slash command runs as a command, anything else as a turn. */
   async function runUserInput(text: string) {
+    if (lastPromptRef.current !== text) {
+      lastPromptRef.current = text
+      void appendHistory(text)   // persists across restarts (↑ recall)
+    }
     setHistory(h => (h[h.length - 1] === text ? h : [...h, text]))
     const slash = parseSlash(text)
     if (slash) {
@@ -611,7 +694,7 @@ export function App(): React.ReactElement {
     )
 
   const commandNames = [
-    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'yolo', 'context', 'compact', 'rewind', 'tasks', 'clear', 'help',
+    'setup', 'model', 'models', 'pull', 'skills', 'soul', 'metrics', 'plan', 'yolo', 'context', 'compact', 'resume', 'rewind', 'tasks', 'clear', 'exit', 'help',
     ...registryRef.current.list().map(m => m.name),
   ]
 
@@ -631,7 +714,11 @@ export function App(): React.ReactElement {
       {pending && (
         <PermissionPrompt
           call={pending.call}
-          onDecision={(ok) => { pending.resolve(ok); setPending(null) }}
+          onDecision={(answer) => {
+            if (answer === 'always') alwaysAllowRef.current.add(pending.call.name)
+            pending.resolve(answer !== 'no')
+            setPending(null)
+          }}
         />
       )}
       {rewinding && (

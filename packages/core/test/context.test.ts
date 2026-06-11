@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { ContextManager } from '../src/context.js'
+import { tokenizerReady } from '../src/tokens.js'
 
 describe('ContextManager', () => {
-  it('tracks messages and reports stats against the effective window', () => {
+  it('tracks messages and reports stats against the effective window', async () => {
+    await tokenizerReady   // deterministic counts (real BPE, not the fallback)
     const cm = new ContextManager({ window: 8192, outputReserve: 2000 })
-    cm.add({ role: 'user', content: 'x'.repeat(4000) }) // ~1000 tokens
+    cm.add({ role: 'user', content: 'some ordinary words repeated over and over. '.repeat(100) })
     const s = cm.stats()
     expect(s.window).toBe(8192)
     expect(s.effective).toBe(6192)            // 8192 - 2000
-    expect(s.used).toBeGreaterThan(900)
+    expect(s.used).toBeGreaterThan(500)       // ~9 tokens × 100 reps
     expect(s.percentUsed).toBeCloseTo(s.used / s.effective, 5)
   })
 

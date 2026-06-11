@@ -116,10 +116,12 @@ your pick with a progress bar, and drops you into a REPL with a live context met
 | 🧩 **Skills** | Claude Code-compatible `SKILL.md` with progressive disclosure. Ships with `commit`, `review`, `explain`, `test` — and reads your `~/.claude/skills` too |
 | 🤖 **Subagents** | The `Task` tool spawns an isolated-context agent that returns one concise report — keeping exploration out of the main window |
 | 📋 **Plan mode** | `/plan` flips to read-only; the agent investigates and proposes a plan before touching anything |
-| 🎚 **Permission modes** | `default` · `acceptEdits` · `plan` · `yolo`, with interactive y/n approval prompts |
+| 🎚 **Permission modes** | `default` · `acceptEdits` · `plan` · `yolo` — safe read-only commands (`ls`, `git status`, …) run without prompting, and approvals offer **y / always (this session) / n** |
 | 🧠 **Memory** | Hierarchical `PODIUM.md` / `CLAUDE.md` (user → project) |
 | ✨ **SOUL.md** | Give Podium a personality/voice — per-project or global. It also **learns durable preferences** ("always be concise") and asks before saving them |
 | ↩️ **Rewind** | `/rewind` jumps back to an earlier point in the conversation **and undoes the file changes** made since — pick a message, press Enter |
+| 💾 **Sessions** | The conversation auto-saves per project after every turn — `/resume` picks up where you left off after a restart. Prompt history (↑/↓) persists too |
+| ⌨️ **Readline editing** | Ctrl+A/E home/end · Ctrl+U/K kill · Ctrl+W delete word · ⌥←/→ word jumps — plus ↑/↓ history and Tab completion |
 | 🪝 **Hooks** | `SessionStart` · `UserPromptSubmit` · `PreToolUse` · `PreCompact` from `~/.podium/settings.json` |
 | 🌐 **Web** | `WebSearch` + `WebFetch` (website scanning) — and it tells you when you're offline instead of failing |
 | 🔌 **Multi-backend** | Ollama · LM Studio · MLX behind one interface, auto-detected |
@@ -139,8 +141,10 @@ Type `/` and a letter for an autocomplete dropdown.
 | `/plan` | Toggle plan mode (read-only) |
 | `/context` | Show the context meter + token breakdown |
 | `/compact` | Summarize + shrink the conversation now |
+| `/resume` | Restore this project's last session (conversation + transcript) |
 | `/rewind` | Step back to an earlier message and undo file changes since |
-| `/clear` | Reset the conversation |
+| `/clear` | Reset the conversation (also forgets the saved session) |
+| `/exit` | Quit — unloads the model from the GPU on the way out |
 | `/<skill>` | Run a skill (e.g. `/commit`, `/review`) |
 
 ## Models
@@ -171,8 +175,9 @@ packages/
   cli/        the `podium` binary, config, slash commands, hooks
 ```
 
-The **context manager** tracks a token budget per turn and auto-compacts (retained
-prefix + summarize-the-tail) before the window fills. The **agentic loop** prefers native
+The **context manager** tracks a token budget per turn — counted with a real BPE
+tokenizer, not a chars/4 guess — and auto-compacts (retained prefix +
+summarize-the-tail) before the window fills. The **agentic loop** prefers native
 function-calling but falls back to parsing text-emitted tool calls — the trick that makes
 small local models usable as agents.
 

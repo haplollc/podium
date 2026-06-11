@@ -33,10 +33,17 @@ export interface ChatRequest {
   signal?: AbortSignal
 }
 
+/** Real token counts from the backend's final stream chunk (when reported). */
+export interface ChatStats {
+  promptTokens?: number
+  evalTokens?: number
+  evalDurationMs?: number
+}
+
 export type ChatEvent =
   | { type: 'text'; delta: string }
   | { type: 'tool_call'; call: ToolCall }
-  | { type: 'done' }
+  | { type: 'done'; stats?: ChatStats }
 
 export interface HealthStatus { running: boolean; detail?: string }
 

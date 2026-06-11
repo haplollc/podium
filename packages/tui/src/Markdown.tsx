@@ -21,12 +21,20 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
   return nodes
 }
 
-/** Lightweight markdown for model responses: headings, bullets, and inline styles. */
+/** Lightweight markdown for model responses: headings, bullets, code fences, and inline styles. */
 export function Markdown({ content }: { content: string }): React.ReactElement {
   const lines = content.split('\n')
+  let inFence = false
   return (
     <Box flexDirection="column">
       {lines.map((line, i) => {
+        const fence = /^\s*```(\w*)/.exec(line)
+        if (fence) {
+          inFence = !inFence
+          // Show the opener as a dim language tag, hide the bare closer.
+          return <Text key={i} dimColor>{inFence && fence[1] ? `┌ ${fence[1]}` : inFence ? '┌' : '└'}</Text>
+        }
+        if (inFence) return <Text key={i} color="cyan">{'│ '}{line}</Text>
         const heading = /^(#{1,6})\s+(.*)$/.exec(line)
         if (heading) return <Text key={i} bold color="magenta">{renderInline(heading[2], `h${i}`)}</Text>
         const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line)

@@ -22,9 +22,13 @@ export interface SlashCtx {
   toggleYolo(): boolean
   /** Open the rewind picker; returns a message if it can't (else null = opened). */
   openRewind(): string | null
+  /** Restore the last saved session for this project; returns a status line. */
+  resume(): Promise<string>
+  /** Quit podium (frees the model); returns the goodbye line shown before exit. */
+  exit(): string
 }
 
-const HELP = 'Commands: /setup · /model · /models · /pull <name> · /skills · /soul · /metrics · /plan · /yolo · /context · /compact · /rewind · /tasks · /clear · /help · /<skill>'
+const HELP = 'Commands: /setup · /model · /models · /pull <name> · /skills · /soul · /metrics · /plan · /yolo · /context · /compact · /resume · /rewind · /tasks · /clear · /exit · /help · /<skill>'
 
 /** Execute a builtin slash command (or a /<skill-name>), returning a transcript line. */
 export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string> {
@@ -40,6 +44,11 @@ export async function runSlash(cmd: SlashCommand, ctx: SlashCtx): Promise<string
     }
     case 'compact':
       return await ctx.compact()
+    case 'resume':
+      return await ctx.resume()
+    case 'exit':
+    case 'quit':
+      return ctx.exit()
     case 'rewind':
       return ctx.openRewind() ?? 'Opening rewind…'
     case 'tasks': {

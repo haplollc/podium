@@ -315,4 +315,57 @@ describe('Repl', () => {
     expect(f).toContain('queued (2)')
     expect(f).toContain('do the next thing')
   })
+
+  it('Ctrl+U kills to start of line (readline editing)', async () => {
+    const onSubmit = vi.fn()
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('discard me')
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('')   // Ctrl+U → clear before caret
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('keep\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('keep'))
+  })
+
+  it('Ctrl+A jumps home, Ctrl+K kills to end', async () => {
+    const onSubmit = vi.fn()
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('tail')
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('')   // Ctrl+A → home
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('')   // Ctrl+K → kill to end (removes "tail")
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('fresh\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('fresh'))
+  })
+
+  it('Ctrl+W deletes the word before the caret', async () => {
+    const onSubmit = vi.fn()
+    const { stdin } = render(
+      <Repl
+        stats={{ used: 0, effective: 8000, window: 8192, percentUsed: 0 }}
+        transcript={[]} onSubmit={onSubmit} busy={false}
+      />,
+    )
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('keep this wrongword')
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('')   // Ctrl+W → delete "wrongword"
+    await new Promise(r => setTimeout(r, 30))
+    stdin.write('right\r')
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledWith('keep this right'))
+  })
 })

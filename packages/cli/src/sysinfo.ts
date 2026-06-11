@@ -30,21 +30,31 @@ async function tryBatteryTemp(): Promise<number | null> {
   return Number.isFinite(c) && c > 0 && c < 120 ? c : null
 }
 
+// Temperature moves slowly but each read spawns a process (ioreg/osx-cpu-temp),
+// so cache readings briefly — the metrics dashboard polls much faster than this.
+const TEMP_CACHE_MS = 5000
+let tempCache: { at: number; value: TempReading | null } | null = null
+
 /**
  * Best-available machine temperature with zero setup: real CPU °C via
  * `osx-cpu-temp` if installed, otherwise the battery sensor via `ioreg`
  * (works on any MacBook without sudo). Returns null if neither is available.
  */
 export async function readTemperature(): Promise<TempReading | null> {
+  if (tempCache && Date.now() - tempCache.at < TEMP_CACHE_MS) return tempCache.value
+  let value: TempReading | null = null
   try {
     const cpu = await tryOsxCpuTemp()
-    if (cpu != null) return { celsius: cpu, source: 'cpu' }
+    if (cpu != null) value = { celsius: cpu, source: 'cpu' }
   } catch { /* fall through */ }
-  try {
-    const batt = await tryBatteryTemp()
-    if (batt != null) return { celsius: batt, source: 'battery' }
-  } catch { /* fall through */ }
-  return null
+  if (!value) {
+    try {
+      const batt = await tryBatteryTemp()
+      if (batt != null) value = { celsius: batt, source: 'battery' }
+    } catch { /* fall through */ }
+  }
+  tempCache = { at: Date.now(), value }
+  return value
 }
 
 /** Green/yellow/red zone for a reading. CPU and battery have different safe ranges. */

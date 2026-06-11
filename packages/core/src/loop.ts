@@ -1,9 +1,9 @@
-import type { Provider, ChatMessage, ToolCall } from '@podium/providers'
+import type { Provider, ChatMessage, ToolCall, ChatStats } from '@podium/providers'
 import type { Tool, TodoStore, BgTaskStore, ToolContextSkills } from '@podium/tools'
 import { ContextManager } from './context.js'
 import { shouldCompact, compact } from './compaction.js'
 import { extractToolCalls, cleanModelText, stripSpecialTokens } from './tool-parse.js'
-import { decide, type PermissionMode } from './permission.js'
+import { decideCall, type PermissionMode } from './permission.js'
 
 export interface RunTurnOpts {
   provider: Provider
@@ -22,6 +22,8 @@ export interface RunTurnOpts {
   onToolResult?: (call: ToolCall, result: string) => void
   /** Fired when the model emits its first event of the turn (i.e. it's done loading). */
   onModelStart?: () => void
+  /** Fired with the backend's real token stats after each model step (tok/s etc.). */
+  onStats?: (stats: ChatStats) => void
   maxSteps?: number
   mode?: PermissionMode
   /** Called when a tool needs interactive approval; return false to deny. */
@@ -180,6 +182,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
             break
           }
         } else if (ev.type === 'tool_call') toolCalls.push(ev.call)
+        else if (ev.type === 'done' && ev.stats) opts.onStats?.(ev.stats)
       }
     } catch (e) {
       if (opts.signal?.aborted || (e as Error).name === 'AbortError') break
@@ -279,7 +282,7 @@ export async function runTurn(opts: RunTurnOpts): Promise<string> {
         opts.onToolResult?.(call, '(repeated call blocked — change approach)')
         continue
       }
-      const d = decide(call.name, mode)
+      const d = decideCall(call, mode)
       if (d === 'deny') {
         cm.add({ role: 'tool', content: `Permission denied: ${call.name} is not allowed in ${mode} mode.`, tool_call_id: call.id })
         continue

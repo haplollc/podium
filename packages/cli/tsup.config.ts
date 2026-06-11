@@ -6,7 +6,7 @@ export default defineConfig({
   // Inline the workspace packages so the published artifact is self-contained.
   noExternal: [/^@podium\//],
   // Runtime deps that stay external (declared in package.json "dependencies").
-  external: ['ink', 'react', 'yaml', 'execa'],
+  external: ['ink', 'react', 'yaml', 'execa', 'gpt-tokenizer', '@vscode/ripgrep'],
   target: 'node20',
   clean: true,
 })

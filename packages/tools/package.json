@@ -4,7 +4,18 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
-  "scripts": { "build": "tsup src/index.ts --format esm --dts" },
-  "dependencies": { "execa": "^9.4.0", "@podium/providers": "workspace:*" }
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts"
+  },
+  "dependencies": {
+    "@podium/providers": "workspace:*",
+    "@vscode/ripgrep": "^1.18.0",
+    "execa": "^9.4.0"
+  }
 }
