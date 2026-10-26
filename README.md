@@ -13,6 +13,7 @@ tuned for **small context windows** and **modest Macs**.
 [![node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![platform](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple)](https://www.apple.com/mac/)
 [![local-first](https://img.shields.io/badge/local-first%20·%20no%20cloud-22c55e)](#)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/jcbuilds)
 
 </div>
 
