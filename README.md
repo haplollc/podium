@@ -119,7 +119,7 @@ your pick with a progress bar, and drops you into a REPL with a live context met
 | | |
 |---|---|
 | 🛠 **Tools** | Read · Write · Edit · Bash · Grep · Glob · TodoWrite — all output-capped for small contexts |
-| 🧩 **Skills** | Claude Code-compatible `SKILL.md` with progressive disclosure. Ships with `commit`, `review`, `explain`, `test` — and reads your `~/.claude/skills` too |
+| 🧩 **Skills** | Claude Code-compatible `SKILL.md` with progressive disclosure. Ships with `commit`, `review`, `explain`, `test` — plus your own from `.podium/skills` (project) and `~/.podium/skills`. Set `PODIUM_CLAUDE_SKILLS=1` to load `~/.claude/skills` too |
 | 🤖 **Subagents** | The `Task` tool spawns an isolated-context agent that returns one concise report — keeping exploration out of the main window |
 | 📋 **Plan mode** | `/plan` flips to read-only; the agent investigates and proposes a plan before touching anything |
 | 🎚 **Permission modes** | `default` · `acceptEdits` · `plan` · `yolo` — safe read-only commands (`ls`, `git status`, …) run without prompting, and approvals offer **y / always (this session) / n** |
