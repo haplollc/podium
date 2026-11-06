@@ -16,6 +16,35 @@ const SAFE_GIT_SUB = new Set([
   'status', 'log', 'diff', 'show', 'branch', 'blame', 'shortlog', 'ls-files', 'remote', 'describe',
 ])
 
+// Arguments that make an allowlisted binary run other programs or write files:
+// fd --exec/-x/-X, rg --pre, sort -o/--output/--compress-program, tree -o,
+// file -C (writes magic.mgc).
+const UNSAFE_ARG: Record<string, RegExp> = {
+  fd: /^(--exec(-batch)?(=.*)?|-[^-]*[xX].*)$/,
+  rg: /^--pre(=.*)?$/,
+  sort: /^(--output(=.*)?|--compress-program(=.*)?|-[^-]*o.*)$/,
+  tree: /^-[^-]*o.*$/,
+  file: /^-[^-]*C.*$/,
+}
+// `git branch` and `git remote` only list when given these arguments; a name,
+// -D, -m, add, remove, set-url and the rest change the repository.
+const SAFE_GIT_BRANCH_ARG = /^(-a|--all|-r|--remotes|-v|-vv|--verbose|-l|--list|--show-current|--merged|--no-merged|--no-color|--(sort|format|color)=.*)$/
+const SAFE_GIT_REMOTE_SUB = new Set(['show', 'get-url'])
+
+function isSafeGit(args: string[]): boolean {
+  const i = args.findIndex(w => !w.startsWith('-'))
+  if (i === -1 || !SAFE_GIT_SUB.has(args[i])) return false
+  const sub = args[i]
+  const rest = args.slice(i + 1)
+  if (rest.some(a => /^--output(=|$)/.test(a))) return false   // diff/log/show --output=<file>
+  if (sub === 'branch') return rest.every(a => SAFE_GIT_BRANCH_ARG.test(a))
+  if (sub === 'remote') {
+    const remoteSub = rest.find(a => !a.startsWith('-'))
+    return remoteSub == null ? rest.every(a => a === '-v' || a === '--verbose') : SAFE_GIT_REMOTE_SUB.has(remoteSub)
+  }
+  return true
+}
+
 /**
  * True when a Bash command is read-only and safe to run without prompting.
  * Conservative: any redirect/substitution/backgrounding, or any pipeline
@@ -29,12 +58,14 @@ export function isSafeBashCommand(cmd: string): boolean {
   const segments = c.split(/\|\||&&|[|;&\n]/).map(s => s.trim())
   if (segments.some(s => !s)) return false   // empty segment (e.g. trailing '&')
   return segments.every(seg => {
-    const words = seg.split(/\s+/)
-    if (words[0] === 'git') {
-      const sub = words.slice(1).find(w => !w.startsWith('-'))
-      return sub != null && SAFE_GIT_SUB.has(sub)
-    }
-    return SAFE_BIN.has(words[0])
+    const [bin, ...args] = seg.split(/\s+/)
+    if (bin === 'git') return isSafeGit(args)
+    if (!SAFE_BIN.has(bin)) return false
+    const unsafe = UNSAFE_ARG[bin]
+    if (unsafe && args.some(a => unsafe.test(a))) return false
+    // uniq writes its result to a second file argument.
+    if (bin === 'uniq' && args.filter(a => !a.startsWith('-')).length > 1) return false
+    return true
   })
 }
 
