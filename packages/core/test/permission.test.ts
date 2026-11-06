@@ -42,6 +42,27 @@ describe('isSafeBashCommand', () => {
       expect(isSafeBashCommand(c), c).toBe(false)
     }
   })
+  it('rejects allowlisted binaries given flags that run programs or write files', () => {
+    for (const c of [
+      'fd . -x rm {}', 'fd -X rm', 'fd --exec-batch rm', 'rg --pre ./run.sh TODO', 'rg --pre=sh TODO',
+      'sort -o notes.txt notes.txt', 'sort --compress-program=sh notes.txt', 'tree -o out.txt',
+      'uniq in.txt out.txt', 'file -C -m magic',
+      'git branch -D main', 'git branch -m main old', 'git branch scratch',
+      'git remote remove origin', 'git remote add x https://example.com/x.git',
+      'git remote set-url origin https://example.com/x.git', 'git diff --output=changes.patch',
+    ]) {
+      expect(isSafeBashCommand(c), c).toBe(false)
+    }
+  })
+  it('still accepts the read-only forms of those binaries', () => {
+    for (const c of [
+      'fd -e ts src', 'rg -n TODO src', 'sort notes.txt', 'tree -L 2', 'uniq -c notes.txt', 'file README.md',
+      'git branch', 'git branch -a', 'git branch --show-current', 'git remote', 'git remote -v',
+      'git remote show origin', 'git remote get-url origin', 'git diff --stat',
+    ]) {
+      expect(isSafeBashCommand(c), c).toBe(true)
+    }
+  })
 })
 
 describe('decideCall', () => {
