@@ -86,6 +86,15 @@ describe('file tools', () => {
     expect(await readFile(f, 'utf8')).toBe('foo baz')
   })
 
+  it('edit writes $ sequences in new_string literally', async () => {
+    const f = path.join(dir, 'run.sh')
+    await writeFile(f, 'echo PID NL MATH')
+    await editTool.run({ file_path: f, old_string: 'PID', new_string: '$$' }, { cwd: dir })
+    await editTool.run({ file_path: f, old_string: 'NL', new_string: "$'\\n'" }, { cwd: dir })
+    await editTool.run({ file_path: f, old_string: 'MATH', new_string: '$& $` $$x$$' }, { cwd: dir })
+    expect(await readFile(f, 'utf8')).toBe("echo $$ $'\\n' $& $` $$x$$")
+  })
+
   it('edit errors when old_string is absent', async () => {
     const f = path.join(dir, 'd.txt')
     await writeFile(f, 'hello')
