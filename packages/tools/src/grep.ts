@@ -22,10 +22,12 @@ export const grepTool: Tool = {
     const glob = args.glob ? String(args.glob) : undefined
 
     const rg = await resolveRg()
+    // Bind the pattern and glob to their flags and end options with `--`, so a
+    // pattern or path that starts with '-' (e.g. --save-dev) is still searched for.
     if (rg) {
-      const rgArgs = ['-n', pattern]
-      if (glob) rgArgs.push('-g', glob)
-      rgArgs.push(target)
+      const rgArgs = ['-n', `--regexp=${pattern}`]
+      if (glob) rgArgs.push(`--glob=${glob}`)
+      rgArgs.push('--', target)
       const r = await execa(rg, rgArgs, { cwd: ctx.cwd, reject: false })
       return truncateLines(r.stdout || '(no matches)', 100)
     }
@@ -34,7 +36,7 @@ export const grepTool: Tool = {
     // Exclude dependency/VCS dirs by hand — plain grep doesn't honor .gitignore.
     const grepArgs = ['-rn', '--exclude-dir=node_modules', '--exclude-dir=.git', '--exclude-dir=dist']
     if (glob) grepArgs.push(`--include=${glob}`)
-    grepArgs.push(pattern, target)
+    grepArgs.push('-e', pattern, '--', target)
     const r = await execa('grep', grepArgs, { cwd: ctx.cwd, reject: false })
     return truncateLines(r.stdout || '(no matches)', 100)
   },

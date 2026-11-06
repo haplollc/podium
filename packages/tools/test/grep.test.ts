@@ -27,6 +27,16 @@ describe('grepTool', () => {
     expect(out).not.toContain('notes.md')
   })
 
+  it('searches for patterns and paths that start with a dash', async () => {
+    await writeFile(path.join(dir, 'notes.txt'), 'npm install --save-dev vitest\n')
+    await writeFile(path.join(dir, '-draft.md'), 'needle in a draft\n')
+    const flagLike = await grepTool.run({ pattern: '--save-dev' }, { cwd: dir })
+    expect(flagLike).toContain('notes.txt')
+    expect(flagLike).toContain('--save-dev vitest')
+    const dashPath = await grepTool.run({ pattern: 'needle', path: '-draft.md' }, { cwd: dir })
+    expect(dashPath).toContain('needle in a draft')
+  })
+
   it('reports (no matches) cleanly', async () => {
     await writeFile(path.join(dir, 'a.txt'), 'hello\n')
     const out = await grepTool.run({ pattern: 'zzz_absent' }, { cwd: dir })
